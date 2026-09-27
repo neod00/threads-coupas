@@ -1,8 +1,8 @@
 {
   "passed": true,
-  "passed_at": "2026-09-27T14:47:49.009000+00:00",
+  "passed_at": "2026-09-27T16:17:40.869142+00:00",
   "reviewer_model": "claude-sonnet-5",
-  "prompt_hash": "abe9f05c4198665f39c7bc25e9426854219b59a71b46b27e93851e046089c464",
+  "prompt_hash": "97e12b5af7d3f5a07bacac454b43a59c2cd02d2286c1dd8978ad18579af2ca9f",
   "cases_hash": "bb8890fe19a843402dbdbfe82dd827537a8a498ed3fd06663f0361f3adca8608",
   "summary": {
     "passed": true,
