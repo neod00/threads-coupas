@@ -52,6 +52,17 @@ class MemoryStore:
                     latest[m["threads_media_id"]] = m
         return copy.deepcopy(latest)
 
+    def metric_checkpoints(self, media_ids) -> set[tuple[str, int]]:
+        return {(m["threads_media_id"], m["hours_since_publish"]) for m in self.metrics if m["threads_media_id"] in media_ids}
+
+    def insert_metric(self, row: dict) -> None:
+        key = (row["threads_media_id"], row["hours_since_publish"])
+        self.metrics = [m for m in self.metrics if (m["threads_media_id"], m["hours_since_publish"]) != key]
+        self.metrics.append(copy.deepcopy(row))
+
+    def upsert_coupang(self, rows: list[dict]) -> None:
+        self.coupang = {**getattr(self, "coupang", {}), **{r["date"]: copy.deepcopy(r) for r in rows}}
+
     # system_state / events
     def get_state(self, key: str, default=None):
         return copy.deepcopy(self.state.get(key, default))
@@ -101,6 +112,21 @@ class SupabaseStore:
         for r in rows:
             latest.setdefault(r["threads_media_id"], r)
         return latest
+
+    def metric_checkpoints(self, media_ids) -> set[tuple[str, int]]:
+        ids = list(media_ids)
+        if not ids:
+            return set()
+        rows = (self.db.table("metrics_post").select("threads_media_id,hours_since_publish")
+                .in_("threads_media_id", ids).execute().data)
+        return {(r["threads_media_id"], r["hours_since_publish"]) for r in rows}
+
+    def insert_metric(self, row: dict) -> None:
+        self.db.table("metrics_post").upsert(row).execute()
+
+    def upsert_coupang(self, rows: list[dict]) -> None:
+        if rows:
+            self.db.table("metrics_coupang_daily").upsert(rows).execute()
 
     def get_state(self, key: str, default=None):
         data = self.db.table("system_state").select("value").eq("key", key).limit(1).execute().data

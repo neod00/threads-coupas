@@ -123,6 +123,42 @@ class ThreadsApi:
     def publish(self, creation_id: str) -> str:
         return self._request("POST", f"{self.user_id}/threads_publish", creation_id=creation_id)["id"]
 
+    # ── 읽기 전용 (Step 8) ──
+    def insights(self, media_id: str) -> dict:
+        """GET /{media-id}/insights → {metric: 값 또는 None}. views·shares 는 비어 올 수 있다 (THREADS_API_NOTES.md)."""
+        data = self._request("GET", f"{media_id}/insights", metric=",".join(INSIGHT_METRICS))
+        return parse_insights(data)
+
+    def conversation(self, media_id: str, max_pages: int = 5) -> list[dict]:
+        """GET /{media-id}/conversation: 깊이와 상관없이 모든 답글 (최신순)."""
+        replies, after = [], None
+        for _ in range(max_pages):
+            params = {"fields": "id,text,username,timestamp,is_reply_owned_by_me"}
+            if after:
+                params["after"] = after
+            data = self._request("GET", f"{media_id}/conversation", **params)
+            replies += data.get("data") or []
+            after = ((data.get("paging") or {}).get("cursors") or {}).get("after")
+            if not after or not (data.get("paging") or {}).get("next"):
+                break
+        return replies
+
+
+INSIGHT_METRICS = ("views", "likes", "replies", "reposts", "quotes", "shares")
+
+
+def parse_insights(data: dict) -> dict:
+    """인사이트 응답의 metric 별 값. values[0].value 또는 total_value.value 형식을 모두 읽는다."""
+    out = {m: None for m in INSIGHT_METRICS}
+    for item in data.get("data") or []:
+        name = item.get("name")
+        if name not in out:
+            continue
+        values = item.get("values") or []
+        value = values[0].get("value") if values else (item.get("total_value") or {}).get("value")
+        out[name] = int(value) if isinstance(value, (int, float)) else None
+    return out
+
 
 class DryRunApi:
     """API 를 부르지 않고 보낼 요청을 로그에 남긴다. access_token 은 남기지 않는다."""
@@ -302,8 +338,10 @@ def publish_reply(post: dict, *, store, api, notifier, dry_run: bool, sleep=time
 
 
 def run_once(store, cfg: Config, *, env=None, api, link_checker, notifier, now: datetime | None = None,
-             exam_status: tuple[bool, str], sleep: Callable[[float], None] = time.sleep) -> dict:
-    """publish.yml 한 번 실행분. 킬 스위치는 main 에서도 먼저 확인하지만 여기서도 다시 본다."""
+             exam_status: tuple[bool, str], sleep: Callable[[float], None] = time.sleep,
+             reply_reader=None) -> dict:
+    """publish.yml 한 번 실행분. 킬 스위치는 main 에서도 먼저 확인하지만 여기서도 다시 본다.
+    reply_reader: 답글을 읽을 API (conversation). 있으면 발행 전에 답글 감시를 먼저 돌린다 (규칙 10-1)."""
     from settings import auto_publish_disabled, dry_run as dry_run_flag
 
     if auto_publish_disabled(env):
@@ -311,6 +349,10 @@ def run_once(store, cfg: Config, *, env=None, api, link_checker, notifier, now: 
         return {"action": "kill_switch"}
     now = now or datetime.now(timezone.utc)
     dry_run = dry_run_flag(env)
+
+    if reply_reader is not None:
+        import watch_replies
+        watch_replies.watch(store, reply_reader, notifier, now)
 
     if autostop.is_stopped(store):
         log.warning("자동 정지 상태라 발행하지 않습니다.")
@@ -372,8 +414,11 @@ def main() -> int:
         log.error("토큰이 만료돼 발행하지 않습니다 (글 상태는 그대로 둡니다).")
         return 1
     api = DryRunApi(secrets.threads_user_id) if dry_run() else ThreadsApi(secrets.threads_user_id, secrets.threads_access_token)
+    # 답글 감시는 읽기만 하므로 연습 모드에서도 토큰이 있으면 실제 API 로 돈다
+    reader = (ThreadsApi(secrets.threads_user_id, secrets.threads_access_token)
+              if secrets.threads_user_id and secrets.threads_access_token else None)
     result = run_once(store, cfg, api=api, link_checker=check_link, notifier=make_notifier(secrets),
-                      exam_status=exam.exam_status(cfg))
+                      exam_status=exam.exam_status(cfg), reply_reader=reader)
     log.info(f"결과: {json.dumps(result, ensure_ascii=False)}")
     return 0 if result["action"] != "failed" else 1
 

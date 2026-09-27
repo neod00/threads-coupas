@@ -7,7 +7,15 @@
 
 - 기본 URL: `https://graph.threads.net/v1.0`
 - 권한: `threads_basic`, `threads_content_publish`, `threads_manage_replies`, `threads_read_replies`, `threads_manage_insights` (PLAN v2 2-1)
-  - `threads_read_replies`는 PLAN v2의 답글 감시(자동 정지)용이다. **답글 조회 엔드포인트와 필드는 아직 확인하지 않았다 — Step 8 `watch_replies.py`를 쓰기 전에 Meta 문서로 확인한다.** 답글에 자동으로 대응하는 기능은 만들지 않는다 (규칙 6).
+  - `threads_read_replies`는 PLAN v2의 답글 감시(자동 정지)용이다. 답글에 자동으로 대응하는 기능은 만들지 않는다 (규칙 6).
+
+## 답글 조회 (Step 8, 2026-09-27 확인)
+
+- `GET /{media-id}/replies`: 바로 아래 답글만. `GET /{media-id}/conversation`: 깊이와 상관없이 모든 답글 (루트 글에만 사용)
+- 이 프로젝트는 `conversation` 을 쓴다: `fields=id,text,username,timestamp,is_reply_owned_by_me`
+- `reverse` 기본값 true (최신순). 응답은 `data` 목록 + `paging`
+- 내가 단 링크 답글(`is_reply_owned_by_me=true`)은 감시 대상에서 뺀다
+- 출처: [Replies and Conversations](https://developers.facebook.com/docs/threads/retrieve-and-manage-replies/replies-and-conversations)
 
 ## 발행 (Step 6)
 
