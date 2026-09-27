@@ -162,6 +162,22 @@ def test_adding_a_case_invalidates(cfg, passed_state):
     assert not ok and "케이스" in reason
 
 
+def test_cases_hash_ignores_line_endings(tmp_path):
+    # Windows(CRLF)에서 본 시험 기록이 GitHub Actions(LF 체크아웃)에서도 유효해야 한다
+    text = exam.CASES_PATH.read_bytes().decode("utf-8").replace("\r\n", "\n")
+    lf, crlf = tmp_path / "lf.json", tmp_path / "crlf.json"
+    lf.write_bytes(text.encode("utf-8"))
+    crlf.write_bytes(text.replace("\n", "\r\n").encode("utf-8"))
+    assert exam.cases_hash(lf) == exam.cases_hash(crlf) == exam.cases_hash()
+
+
+def test_prompt_hash_ignores_line_endings(cfg, tmp_path):
+    text = reviewer.PROMPT_PATH.read_bytes().decode("utf-8").replace("\r\n", "\n")
+    p = tmp_path / "reviewer.md"
+    p.write_bytes(text.replace("\n", "\r\n").encode("utf-8"))
+    assert reviewer.prompt_hash(cfg, prompt_path=p) == reviewer.prompt_hash(cfg)
+
+
 def test_failed_or_missing_state_is_not_passed(cfg, passed_state, tmp_path):
     ok, reason = exam.exam_status(cfg, state_path=tmp_path / "없음.json")
     assert not ok and "기록이 없습니다" in reason

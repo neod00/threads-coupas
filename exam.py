@@ -39,7 +39,9 @@ def load_cases(path: Path = CASES_PATH) -> dict:
 
 
 def cases_hash(path: Path = CASES_PATH) -> str:
-    return hashlib.sha256(Path(path).read_bytes()).hexdigest()
+    """줄바꿈(CRLF/LF)과 상관없는 해시. Windows 에서 본 시험 기록이 GitHub Actions(리눅스)에서도 맞아야 한다."""
+    text = Path(path).read_bytes().decode("utf-8").replace("\r\n", "\n")
+    return hashlib.sha256(text.encode("utf-8")).hexdigest()
 
 
 def build_case(case: dict, data: dict, cfg: Config) -> tuple[dict, list[dict], list[str]]:
