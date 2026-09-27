@@ -124,6 +124,7 @@ def main(argv=None) -> int:
     ap.add_argument("command", choices=["generate"])
     ap.add_argument("--dry-run", action="store_true", help="생성·검증만 하고 저장하지 않음")
     ap.add_argument("--variant", choices=generator.VARIANTS, default="link_in_body")
+    ap.add_argument("--out", help="생성된 글 전체를 이 JSON 파일로 저장 (검토용)")
     args = ap.parse_args(argv)
 
     if auto_publish_disabled():
@@ -147,7 +148,11 @@ def main(argv=None) -> int:
     summary = [{"type": p["type"], "status": p["status"], "scheduled_at": p["scheduled_at"],
                 "hook": guard.hook_line(p)} for p in result["posts"]]
     print(json.dumps({"action": result["action"], "posts": summary}, ensure_ascii=False, indent=2))
-    if args.dry_run:
+    if args.out:
+        with open(args.out, "w", encoding="utf-8") as f:
+            json.dump(result["posts"], f, ensure_ascii=False, indent=2)
+        print(f"전체 글 저장: {args.out}")
+    elif args.dry_run:
         print(json.dumps(result["posts"], ensure_ascii=False, indent=2))
     return 0
 

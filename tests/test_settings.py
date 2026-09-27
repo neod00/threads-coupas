@@ -213,7 +213,7 @@ def test_project_config_matches_plan():
     assert set(settings.REQUIRED_BANNED_WORDS) <= set(cfg.banned_words)
     assert set(settings.REQUIRED_BANNED_HOOK_PHRASES) <= set(cfg.banned_hook_phrases)
     assert (cfg.generator_model, cfg.generator_fallback_model, cfg.reviewer_model) == (
-        "gemini-2.5-flash", "gpt-4.1-mini", "claude-sonnet-5")
+        "gemini-3.8-flash", "gpt-4.1-mini", "claude-sonnet-5")
     assert cfg.digest_time_kst.strftime("%H:%M") == "21:00"
     assert cfg.test_start_date is None
 
