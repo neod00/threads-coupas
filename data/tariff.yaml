@@ -1,12 +1,15 @@
-# 주택용 저압 전기요금표 — 한전 사이버지점에서 직접 확인한 값을 입력한다.
+# 주택용 저압 전기요금표 — 한전 요금표에서 직접 확인한 값 (기타계절 1.1~6.30, 9.1~12.31)
 # 코드에는 요금 숫자를 하드코딩하지 않는다. 값이 비어 있으면 계산기가 실행을 거부한다.
 # 입력 후 점검: python calculator.py --power 2000 --hours 4
 
-effective_date: null          # 확인한 요금표 기준일, 예: "2026-10-01"
-season: winter                # 누진 구간이 계절별로 다를 수 있음
-tiers:                        # 주택용 저압 누진 구간 (전력량요금, 원/kWh)
-  - {upto_kwh: null, rate_per_kwh: null}
-  - {upto_kwh: null, rate_per_kwh: null}
-  - {upto_kwh: null, rate_per_kwh: null}    # 마지막 구간의 upto_kwh 는 null 로 둔다
-surcharge_multiplier: null    # 부가세·전력기금 등 반영 배수, 예: 1.137
-assumed_tier_for_posts: 2     # 게시물에서 가정할 누진 구간
+effective_date: "2024-07-01"  # 한전 「2024년 7월 1일 시행 전기요금표(주택용 저압)」
+season: winter                # 기타계절 요금표 사용
+tiers:                        # 전력량요금 (원/kWh)
+  - {upto_kwh: 200, rate_per_kwh: 120.0}    # 200kWh 이하
+  - {upto_kwh: 400, rate_per_kwh: 214.6}    # 201~400kWh
+  - {upto_kwh: null, rate_per_kwh: 307.3}   # 400kWh 초과
+# 1 + 부가세 0.1 + 전력산업기반기금 0.027. 요금표 '전기요금 구조'는 2.7%, 같은 문서 계산 예시는 3.2% 로 달라
+# 규칙 설명(2.7%)을 따랐다. 고지서로 확인해 다르면 고친다.
+surcharge_multiplier: 1.127
+assumed_tier_for_posts: 2
+# 참고: 동계(12~2월) 1,000kWh 초과 슈퍼유저요금 736.2원/kWh 는 일반 가정 가정치에서 제외
