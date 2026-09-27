@@ -1,0 +1,9 @@
+python-dotenv>=1.0
+PyYAML>=6.0
+google-genai>=1.0
+openai>=1.40
+anthropic>=1.8
+supabase>=2.31          # 2.31 미만은 새 형식 키(sb_secret_...)를 "Invalid API key" 로 거부한다
+requests>=2.31
+# 모니터링 화면(monitor_app.py, 로컬 전용)을 쓸 때만: pip install streamlit
+pytest>=8.0

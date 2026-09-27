@@ -1,0 +1,42 @@
+name: Cancel post
+
+# 예정 글(approved, 발행 전)을 cancelled 로 바꾼다. GitHub 모바일 앱의 Actions 탭에서도 실행할 수 있다.
+# post_id 는 일일 요약에 표시된다.
+
+on:
+  workflow_dispatch:
+    inputs:
+      post_id:
+        description: '취소할 post_id (일일 요약에 표시된 값)'
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: publish          # 발행 작업과 동시에 돌지 않게 같은 그룹을 쓴다
+  cancel-in-progress: false
+
+jobs:
+  cancel:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - run: pip install -r requirements.txt
+      - name: Cancel
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+          INPUT_POST_ID: ${{ inputs.post_id }}
+        run: |
+          set -euo pipefail
+          if ! [[ "${INPUT_POST_ID}" =~ ^[0-9a-fA-F-]{36}$ ]]; then
+            echo "post_id 형식 오류: UUID 가 필요합니다." >&2
+            exit 1
+          fi
+          python actions.py cancel "${INPUT_POST_ID}"

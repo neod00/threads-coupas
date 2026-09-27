@@ -1,0 +1,229 @@
+"""
+Step 4-B AI 검수자 테스트. Claude 는 가짜 호출로 바꿔 네트워크 없이 검증한다.
+
+8장 체크리스트 (AI 검수자)
+  - 검수자 응답 형식 오류 → 재요청 후 held
+  - uncertain 판정 → held (일일 요약 표시는 Step 5 에서 digest 로 증명; 여기서는 표시에 쓸 사유가 남는지 확인)
+그 밖에: 전 항목 pass → approved, 훅 문제 → 훅 교체 후 재검수, 본문 문제 → 재생성, 요청 형식
+"""
+import json
+import types as pytypes
+from datetime import datetime, timezone
+
+import pytest
+
+import generator
+import reviewer
+
+CALC_HOOK = "2,000W 히터 하루 4시간이면 한 달 240kWh"
+CALC_BODY = (
+    "누진 2단계 가정, 기본요금·감면 제외 추정으로 약 5만 8,600원이 추가로 나옵니다.\n\n"
+    "같은 시간 1,000W 저전력 모드로 돌리면 사용량이 줄어듭니다.\n"
+    "작은 방이라면 저전력 모드부터 써보는 게 낫습니다."
+)
+NOW = datetime(2026, 11, 2, 11, 0, tzinfo=timezone.utc)
+HOOKS = [
+    {"style": "question", "text": "2,000W 히터 한 달 전기료는 얼마일까요?"},
+    {"style": "result", "text": CALC_HOOK},
+    {"style": "compare", "text": "2,000W 히터, 한 달 240kWh 차이"},
+]
+
+
+def verdicts(**overrides):
+    """R1~R12 전부 pass 인 판정에 일부 항목만 바꾼다. 예: verdicts(R2=("fail", False))"""
+    data = {c: {"verdict": "pass", "reason": "문제 없음", "hook_only": False} for c in reviewer.ITEM_CODES}
+    for code, (verdict, hook_only) in overrides.items():
+        data[code] = {"verdict": verdict, "reason": f"{code} 사유", "hook_only": hook_only}
+    return data
+
+
+class FakeClaude:
+    """(system, user) → (stop_reason, text). 응답은 dict(→JSON), 문자열, (stop_reason, text), 예외 중 하나."""
+
+    def __init__(self, *responses):
+        self.responses, self.calls = list(responses), []
+
+    def __call__(self, system, user):
+        self.calls.append({"system": system, "user": json.loads(user)})
+        r = self.responses.pop(0)
+        if isinstance(r, Exception):
+            raise r
+        if isinstance(r, tuple):
+            return r
+        return "end_turn", r if isinstance(r, str) else json.dumps(r, ensure_ascii=False)
+
+
+class FakeLLM:
+    def __init__(self, n=3):
+        self.calls = 0
+        self.n = n
+
+    def __call__(self, system, user, temperature):
+        self.calls += 1
+        return json.dumps({"hook_candidates": HOOKS, "body": CALC_BODY, "reply_line": None, "topic_tag": None},
+                          ensure_ascii=False)
+
+
+def generate(cfg, tariff, products, claude, llm=None):
+    rev = reviewer.Reviewer(cfg, claude)
+    check = reviewer.make_check(rev, reviewer.product_rows([products[0]]), ["최근 글 1"])
+    llm = llm or FakeLLM()
+    post = generator.generate_post("calc", [products[0]], tariff, cfg, llm, checks=[check], now=NOW)
+    return post, llm
+
+
+# ── 8장: 형식 오류 → 재요청 후 held ─────────────────────────────────────────
+
+def test_format_error_retried_once_then_held(cfg, tariff, products):
+    claude = FakeClaude("형식이 틀린 답", '{"R1": "pass"}')
+    post, llm = generate(cfg, tariff, products, claude)
+    assert len(claude.calls) == 2                        # 최초 1회 + 재요청 1회
+    assert post["status"] == "held"
+    assert llm.calls == 1                                # 재생성하지 않고 바로 held
+    assert post["review_result"]["status"] == "format_error"
+    assert post["review_attempts"] == 2
+    assert post["review_model"] == cfg.reviewer_model
+
+
+def test_format_error_then_valid_answer_continues(cfg, tariff, products):
+    claude = FakeClaude("{잘린 JSON", verdicts())
+    post, _ = generate(cfg, tariff, products, claude)
+    assert post["status"] == "approved"
+    assert post["review_attempts"] == 2
+
+
+@pytest.mark.parametrize("bad", [
+    ("refusal", ""),                                            # 거부
+    ("max_tokens", '{"R1": {"verdict": "pass"'),                # 잘림
+    {k: v for k, v in verdicts().items() if k != "R12"},        # 항목 누락
+    {**verdicts(), "R13": {"verdict": "pass", "reason": "", "hook_only": False}},     # 모르는 항목
+    verdicts(R3=("maybe", False)),                              # 없는 판정 값
+    RuntimeError("connection reset"),                           # 네트워크 오류
+])
+def test_each_format_error_kind_is_detected(cfg, bad):
+    result = reviewer.Reviewer(cfg, FakeClaude(bad, bad)).review({"type": "calc", "text": "x"})
+    assert result.status == "format_error"
+    assert result.requests == 2 and len(result.errors) == 2
+
+
+# ── 8장: uncertain → held ───────────────────────────────────────────────────
+
+def test_uncertain_goes_to_held_without_regeneration(cfg, tariff, products):
+    claude = FakeClaude(verdicts(R3=("uncertain", False)))
+    post, llm = generate(cfg, tariff, products, claude)
+    assert post["status"] == "held"
+    assert llm.calls == 1 and len(claude.calls) == 1     # 훅 교체·재생성 없이 바로 held
+    # 일일 요약에 보여 줄 사유가 남는다
+    assert post["review_result"]["status"] == "uncertain"
+    assert post["review_result"]["items"]["R3"] == {"verdict": "uncertain", "reason": "R3 사유", "hook_only": False}
+    assert "[R3] uncertain: R3 사유" in post["guard_log"]["attempts"][-1]["problems"]
+
+
+def test_uncertain_even_with_fails_is_held(cfg, tariff, products):
+    post, _ = generate(cfg, tariff, products, FakeClaude(verdicts(R2=("fail", False), R4=("uncertain", False))))
+    assert post["status"] == "held"
+
+
+# ── 처리 흐름 ────────────────────────────────────────────────────────────────
+
+def test_all_pass_becomes_approved(cfg, tariff, products):
+    claude = FakeClaude(verdicts())
+    post, _ = generate(cfg, tariff, products, claude)
+    assert post["status"] == "approved"
+    assert post["review_result"]["status"] == "approved"
+    assert post["review_attempts"] == 1
+    # 검수자가 받은 입력: 본문, calc_payload, 상품 행, 최근 글
+    sent = claude.calls[0]["user"]
+    assert sent["post"]["text"] == post["text"]
+    assert sent["calc_payload"]["est_added_cost_won"] == 58_600
+    assert sent["products"][0]["name"] == "A사 전기히터"
+    assert sent["recent_posts"] == ["최근 글 1"]
+
+
+def test_guard_only_gives_draft_not_approved(cfg, tariff, products):
+    # 규칙 4: 검수자를 거치지 않은 글은 approved 가 되지 않는다
+    post = generator.generate_post("calc", [products[0]], tariff, cfg, FakeLLM(), now=NOW)
+    assert post["status"] == "draft"
+
+
+def test_hook_only_fail_swaps_hook_and_rereviews(cfg, tariff, products):
+    claude = FakeClaude(verdicts(R12=("fail", True)), verdicts())
+    post, llm = generate(cfg, tariff, products, claude)
+    assert post["status"] == "approved"
+    assert llm.calls == 1 and len(claude.calls) == 2
+    assert post["hook_style"] == "result"                 # question 훅이 걸려 result 로 교체
+    assert post["review_attempts"] == 2
+
+
+def test_body_fail_regenerates_without_trying_other_hooks(cfg, tariff, products):
+    claude = FakeClaude(verdicts(R2=("fail", False)), verdicts())
+    post, llm = generate(cfg, tariff, products, claude)
+    assert post["status"] == "approved"
+    assert llm.calls == 2 and len(claude.calls) == 2      # 본문 문제는 훅을 바꿔도 안 풀리므로 바로 재생성
+    assert [a["hook_style"] for a in post["guard_log"]["attempts"]] == ["question", "question"]
+
+
+def test_fail_after_two_regenerations_is_held(cfg, tariff, products):
+    claude = FakeClaude(*[verdicts(R4=("fail", False))] * 3)
+    post, llm = generate(cfg, tariff, products, claude)
+    assert post["status"] == "held"
+    assert llm.calls == 3 and post["review_attempts"] == 3
+
+
+def test_reviewer_only_sees_guard_passed_posts(cfg, tariff, products):
+    # 가드에 걸리는 훅(compare: 이 상품 데이터에 없는 숫자 없음 → 여기서는 숫자 없는 훅)은 검수 요청을 보내지 않는다
+    hooks = [{"style": s, "text": "전기히터 한 달 요금은?"} for s in ("question", "result", "compare")]
+
+    class NoNumberLLM(FakeLLM):
+        def __call__(self, system, user, temperature):
+            self.calls += 1
+            return json.dumps({"hook_candidates": hooks, "body": CALC_BODY}, ensure_ascii=False)
+
+    claude = FakeClaude()
+    post, _ = generate(cfg, tariff, products, claude, NoNumberLLM())
+    assert post["status"] == "held" and claude.calls == []
+
+
+# ── 프롬프트·요청 ────────────────────────────────────────────────────────────
+
+def test_system_prompt_has_rules_and_disclosure(cfg):
+    system = reviewer.system_prompt(cfg)
+    assert "10. **자동 정지.**" in system and "1. **계정은 1개.**" in system     # PLAN 1장 전문
+    assert cfg.disclosure_text in system
+    assert "문제를 찾는 것이 임무" in system
+    assert "{" not in system.replace("{{", "")                              # 채워지지 않은 자리표시자 없음
+
+
+def test_prompt_hash_changes_with_prompt_or_plan(cfg, tmp_path):
+    base = reviewer.prompt_hash(cfg)
+    prompt = tmp_path / "reviewer.md"
+    prompt.write_text(reviewer.PROMPT_PATH.read_text(encoding="utf-8") + "\n추가 지시", encoding="utf-8")
+    assert reviewer.prompt_hash(cfg, prompt_path=prompt) != base
+    plan = tmp_path / "PLAN.md"
+    plan.write_text(reviewer.PLAN_PATH.read_text(encoding="utf-8").replace("계정은 1개.", "계정은 2개."), encoding="utf-8")
+    assert reviewer.prompt_hash(cfg, plan_path=plan) != base
+
+
+def test_anthropic_request_shape(monkeypatch):
+    import anthropic
+
+    captured = {}
+
+    class FakeMessages:
+        def create(self, **kwargs):
+            captured.update(kwargs)
+            return pytypes.SimpleNamespace(stop_reason="end_turn",
+                                           content=[pytypes.SimpleNamespace(type="text", text="{}")])
+
+    class FakeClient:
+        def __init__(self, api_key):
+            self.messages = FakeMessages()
+
+    monkeypatch.setattr(anthropic, "Anthropic", FakeClient)
+    call = reviewer.make_anthropic_call("k", "claude-opus-5")
+    assert call("sys", "user") == ("end_turn", "{}")
+    assert captured["model"] == "claude-opus-5"
+    assert captured["system"] == "sys"
+    assert captured["output_config"]["format"] == {"type": "json_schema", "schema": reviewer.OUTPUT_SCHEMA}
+    assert "temperature" not in captured                  # Opus 5 는 temperature 를 받지 않는다
+    assert "fallbacks" not in captured                    # 시험을 치르지 않은 모델로 넘어가지 않게
