@@ -159,7 +159,14 @@ def test_cancel_workflow_calls_cancel_action():
     wf = yaml.safe_load((PROJECT_ROOT / ".github" / "workflows" / "cancel_post.yml").read_text(encoding="utf-8"))
     triggers = wf[True] if True in wf else wf["on"]      # YAML 1.1 은 'on' 을 True 로 읽는다
     assert "post_id" in triggers["workflow_dispatch"]["inputs"]
-    assert "python actions.py cancel" in wf["jobs"]["cancel"]["steps"][-1]["run"]
+    assert "python actions.py" in wf["jobs"]["cancel"]["steps"][-1]["run"]
+
+
+def test_cancel_dry_run_changes_nothing(world):
+    store, posts = world
+    pid = posts["tomorrow"]["id"]
+    assert actions.cancel_post(store, pid, dry_run=True)["status"] == "approved"
+    assert store.get_post(pid)["status"] == "approved"
 
 
 # ── 모니터링 화면 조작 (actions) ──────────────────────────────────────────────

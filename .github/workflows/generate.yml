@@ -1,0 +1,63 @@
+name: Generate
+
+# 매일 20:00 KST: 다음 날 분량 생성 → 코드 가드 → AI 검수자 → 슬롯 배정 (pipeline.py).
+# 킬 스위치(AUTO_PUBLISH_DISABLED=true)·자동 정지 상태면 생성하지 않는다.
+# 수동 실행의 dry_run 은 생성·검증만 하고 DB 에 저장하지 않는다 (LLM 비용은 발생).
+
+on:
+  schedule:
+    - cron: '0 11 * * *'     # 11:00 UTC = 20:00 KST
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: '생성·검증만 하고 저장하지 않음 (LLM 비용 발생)'
+        required: false
+        type: boolean
+        default: true
+      variant:
+        description: '링크 위치'
+        required: false
+        type: choice
+        options: [link_in_body, link_in_reply]
+        default: link_in_body
+
+permissions:
+  contents: read
+
+concurrency:
+  group: generate
+  cancel-in-progress: false
+
+jobs:
+  generate:
+    if: vars.AUTO_PUBLISH_DISABLED != 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      AUTO_PUBLISH_DISABLED: ${{ vars.AUTO_PUBLISH_DISABLED }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: pip
+      - run: pip install -r requirements.txt
+      - name: Generate tomorrow's posts
+        env:
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+          INPUT_DRY_RUN: ${{ inputs.dry_run }}
+          INPUT_VARIANT: ${{ inputs.variant || 'link_in_body' }}
+        run: |
+          set -euo pipefail
+          args=(generate --variant "${INPUT_VARIANT}")
+          if [ "${INPUT_DRY_RUN}" = "true" ]; then
+            args+=(--dry-run)
+          fi
+          echo "실행: python pipeline.py ${args[*]}"
+          python pipeline.py "${args[@]}"

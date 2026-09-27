@@ -30,12 +30,15 @@ def _get(store, post_id: str) -> dict:
     return post
 
 
-def cancel_post(store, post_id: str, by: str = "cancel_post") -> dict:
+def cancel_post(store, post_id: str, by: str = "cancel_post", dry_run: bool = False) -> dict:
+    """dry_run 이면 취소할 수 있는지만 확인하고 바꾸지 않는다."""
     post = _get(store, post_id)
     if post["status"] == "published" or post.get("threads_media_id"):
         raise ActionError("이미 발행된 글은 취소할 수 없습니다 (스레드 앱에서 직접 삭제하세요)")
     if post["status"] != "approved":
         raise ActionError(f"예정 글(approved)만 취소할 수 있습니다. 현재 상태: {post['status']}")
+    if dry_run:
+        return post
     updated = store.update_post(post["id"], {"status": "cancelled"})
     store.log_event("cancel_post", {"post_id": post["id"], "scheduled_at": post.get("scheduled_at"), "by": by})
     return updated
@@ -96,16 +99,18 @@ def main(argv=None) -> int:
 
     if hasattr(sys.stdout, "reconfigure"):
         sys.stdout.reconfigure(encoding="utf-8")
-    argv = argv if argv is not None else sys.argv[1:]
+    argv = list(argv if argv is not None else sys.argv[1:])
+    dry_run = "--dry-run" in argv
+    argv = [a for a in argv if a != "--dry-run"]
     if len(argv) != 2 or argv[0] != "cancel":
-        print("사용법: python actions.py cancel <post_id>")
+        print("사용법: python actions.py cancel <post_id> [--dry-run]")
         return 2
     try:
-        post = cancel_post(open_store(load_secrets()), argv[1])
+        post = cancel_post(open_store(load_secrets()), argv[1], dry_run=dry_run)
     except (ActionError, ConfigError) as e:
         print(f"취소 실패: {e}")
         return 1
-    print(f"취소됨: {post['id']} (예정 {post.get('scheduled_at')})")
+    print(f"{'취소 가능 (dry_run, 바꾸지 않음)' if dry_run else '취소됨'}: {post['id']} (예정 {post.get('scheduled_at')})")
     return 0
 
 

@@ -1,0 +1,48 @@
+name: Digest
+
+# 매일 21:00 KST: 일일 요약을 텔레그램으로 보낸다 (digest.py). 읽지 않아도 발행은 진행된다.
+# config.yaml 의 digest_time_kst 를 바꾸면 아래 cron 도 같이 바꾼다 (cron 은 UTC).
+# 수동 실행의 dry_run 은 보내지 않고 로그에만 출력한다.
+
+on:
+  schedule:
+    - cron: '0 12 * * *'     # 12:00 UTC = 21:00 KST
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: '텔레그램으로 보내지 않고 로그에만 출력'
+        required: false
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+
+jobs:
+  digest:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      AUTO_PUBLISH_DISABLED: ${{ vars.AUTO_PUBLISH_DISABLED }}
+      DRY_RUN: ${{ vars.DRY_RUN == 'false' && 'false' || 'true' }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: pip
+      - run: pip install -r requirements.txt
+      - name: Send digest
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+          THREADS_TOKEN_ISSUED_AT: ${{ secrets.THREADS_TOKEN_ISSUED_AT }}
+          INPUT_DRY_RUN: ${{ inputs.dry_run }}
+        run: |
+          if [ "${INPUT_DRY_RUN}" = "true" ]; then
+            python digest.py --dry-run
+          else
+            python digest.py
+          fi

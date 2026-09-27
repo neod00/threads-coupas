@@ -10,6 +10,11 @@ on:
         description: '취소할 post_id (일일 요약에 표시된 값)'
         required: true
         type: string
+      dry_run:
+        description: '취소할 수 있는지만 확인하고 바꾸지 않음'
+        required: false
+        type: boolean
+        default: false
 
 permissions:
   contents: read
@@ -33,10 +38,15 @@ jobs:
           SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
           SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
           INPUT_POST_ID: ${{ inputs.post_id }}
+          INPUT_DRY_RUN: ${{ inputs.dry_run }}
         run: |
           set -euo pipefail
           if ! [[ "${INPUT_POST_ID}" =~ ^[0-9a-fA-F-]{36}$ ]]; then
             echo "post_id 형식 오류: UUID 가 필요합니다." >&2
             exit 1
           fi
-          python actions.py cancel "${INPUT_POST_ID}"
+          args=(cancel "${INPUT_POST_ID}")
+          if [ "${INPUT_DRY_RUN}" = "true" ]; then
+            args+=(--dry-run)
+          fi
+          python actions.py "${args[@]}"
