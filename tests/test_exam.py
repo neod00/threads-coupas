@@ -86,6 +86,35 @@ def test_one_missed_problem_fails_the_exam(cfg):
     assert summary["missed_problems"] == ["P04"]
 
 
+def test_format_errors_do_not_count_as_blocked(cfg):
+    # 검수자가 판정을 내리지 못한 것(형식 오류)은 문제 글을 '막은' 것이 아니다
+    by_text = {exam.build_case(c, DATA, cfg)[0]["text"]: c for c in CASES}
+
+    def call(system, user):
+        case = by_text[json.loads(user)["post"]["text"]]
+        if case["id"] == "P04":
+            return "end_turn", "형식이 틀린 답"
+        items = {code: {"verdict": "pass", "reason": "", "hook_only": False} for code in reviewer.ITEM_CODES}
+        if case["expect"] == "block":
+            items[case["violations"][0]]["verdict"] = "fail"
+        return "end_turn", json.dumps(items)
+
+    summary = exam.run_exam(reviewer.Reviewer(cfg, call), cfg, DATA)
+    assert summary["passed"] is False and summary["missed_problems"] == ["P04"]
+
+
+def test_exam_stops_early_when_api_calls_keep_failing(cfg):
+    calls = []
+
+    def call(system, user):
+        calls.append(1)
+        raise RuntimeError("Your credit balance is too low to access the Anthropic API")
+
+    summary = exam.run_exam(reviewer.Reviewer(cfg, call), cfg, DATA)
+    assert summary["passed"] is False and summary["completed"] is False
+    assert len(calls) == exam.ABORT_AFTER_CALL_FAILURES * reviewer.MAX_REQUESTS     # 3케이스 × 2회 후 중단
+
+
 def test_two_rejected_normals_still_pass_but_three_fail(cfg):
     assert exam.run_exam(ideal_reviewer(cfg, {"N01": "fail", "N02": "fail"}), cfg, DATA)["passed"] is True
     summary = exam.run_exam(ideal_reviewer(cfg, {"N01": "fail", "N02": "fail", "N03": "fail"}), cfg, DATA)

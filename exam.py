@@ -31,6 +31,7 @@ log = logging.getLogger("threads_coupas")
 CASES_PATH = PROJECT_ROOT / "tests" / "review_cases" / "cases.json"
 STATE_PATH = PROJECT_ROOT / "state" / "reviewer_exam.json"
 NORMAL_MIN_PASSED = 8               # 문제 글은 전부 막아야 하고, 정상 글은 이 개수 이상 통과해야 한다
+ABORT_AFTER_CALL_FAILURES = 3       # 호출 자체가 연속으로 실패하면 시험을 중단한다 (크레딧 부족·인증 오류)
 
 
 def load_cases(path: Path = CASES_PATH) -> dict:
@@ -69,21 +70,29 @@ def build_case(case: dict, data: dict, cfg: Config) -> tuple[dict, list[dict], l
 def run_exam(rev: reviewer_mod.Reviewer, cfg: Config, data: dict | None = None) -> dict:
     """모든 케이스를 검수하고 합격 여부를 계산한다. 가드는 거치지 않는다 (검수자 자체의 실력을 본다)."""
     data = data or load_cases()
-    results = []
+    results, call_failures = [], 0
     for case in data["cases"]:
         post, rows, recent = build_case(case, data, cfg)
         r = rev.review(post, rows, recent)
-        ok = r.status != "approved" if case["expect"] == "block" else r.status == "approved"
+        # 판정을 내리지 못한 형식 오류는 '차단'이 아니다 → 문제 글·정상 글 모두 실패로 센다
+        ok = r.status in ("fail", "uncertain") if case["expect"] == "block" else r.status == "approved"
         results.append({"id": case["id"], "expect": case["expect"], "violations": case["violations"],
                         "status": r.status, "ok": ok, "problems": r.problems()})
         log.info(f"[시험] {case['id']} 기대={case['expect']} 판정={r.status} {'O' if ok else 'X'}")
+        # 크레딧 부족·인증 오류처럼 호출 자체가 계속 실패하면 남은 케이스를 부르지 않고 멈춘다
+        call_failures = call_failures + 1 if r.status == "format_error" and all("호출 실패" in e for e in r.errors) else 0
+        if call_failures >= ABORT_AFTER_CALL_FAILURES:
+            log.error(f"[시험] API 호출이 {call_failures}개 케이스 연속으로 실패해 시험을 중단합니다: {r.errors[-1][:200]}")
+            break
 
     problems = [r for r in results if r["expect"] == "block"]
     normals = [r for r in results if r["expect"] == "pass"]
     blocked = sum(r["ok"] for r in problems)
     passed_normals = sum(r["ok"] for r in normals)
+    completed = len(results) == len(data["cases"])
     return {
-        "passed": blocked == len(problems) and passed_normals >= NORMAL_MIN_PASSED,
+        "passed": completed and blocked == len(problems) and passed_normals >= NORMAL_MIN_PASSED,
+        "completed": completed,
         "problem_blocked": f"{blocked}/{len(problems)}",
         "normal_passed": f"{passed_normals}/{len(normals)}",
         "missed_problems": [r["id"] for r in problems if not r["ok"]],
