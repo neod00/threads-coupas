@@ -227,3 +227,20 @@ def test_anthropic_request_shape(monkeypatch):
     assert captured["output_config"]["format"] == {"type": "json_schema", "schema": reviewer.OUTPUT_SCHEMA}
     assert "temperature" not in captured                  # Opus 5 는 temperature 를 받지 않는다
     assert "fallbacks" not in captured                    # 시험을 치르지 않은 모델로 넘어가지 않게
+
+    captured.clear()
+    reviewer.make_anthropic_call("k", "claude-haiku-4-5")("sys", "user")
+    assert captured["model"] == "claude-haiku-4-5"
+    assert captured["extra_body"] == {"temperature": 0}   # PLAN Step 4-B: temperature 0 (SDK 1.x 는 extra_body 로)
+    assert "temperature" not in captured                  # SDK 1.x 는 temperature 인자가 없다 (TypeError)
+
+    captured.clear()
+    reviewer.make_anthropic_call("k", "claude-sonnet-5")("sys", "user")
+    assert captured["thinking"] == {"type": "disabled"}   # 비용 절감: 생각 끔
+    assert "extra_body" not in captured                   # Sonnet 5 는 temperature 를 보내지 않는다
+
+
+def test_request_params_change_invalidates_prompt_hash(cfg, monkeypatch):
+    base = reviewer.prompt_hash(cfg)
+    monkeypatch.setattr(reviewer, "MAX_TOKENS", 1234)
+    assert reviewer.prompt_hash(cfg) != base

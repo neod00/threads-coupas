@@ -3,7 +3,8 @@ AI 검수자 (PLAN v2 Step 4-B). 로옥션 column_guard.py 의 llm_factcheck(문
 
 - 생성 모델과 다른 회사의 모델(config.reviewer_model, Claude)을 쓴다. settings 가 제공사 분리를 이미 확인했다.
 - JSON 스키마(output_config.format)로 R1~R12 판정을 받는다. 형식이 틀리면 1회 재요청, 그래도 틀리면 held.
-  Claude Opus 5 는 temperature 를 받지 않으므로(보내면 400) PLAN 의 "temperature 0" 대신 스키마와 고정 프롬프트로 판정을 고정한다.
+  검수 모델은 Claude Sonnet 5, 생각(thinking) 끔 (2026-09-27 결정. Haiku 4.5 는 시험에서 문제 글 2개를 놓쳤다).
+  Sonnet 5 는 temperature 를 기본값 외로 보내면 거부하므로 보내지 않는다. Haiku 4.5 로 바꾸면 temperature 0 을 준다 (request_params).
 - 서버 측 거부 대체(fallbacks)는 켜지 않는다. 다른 모델이 판정하면 시험지(Step 4-C)를 치르지 않은 모델의 판정이 되기 때문이다.
   거부(refusal)·출력 한도 초과는 형식 오류로 보고 같은 규칙(재요청 1회 → held)을 따른다.
 
@@ -34,7 +35,23 @@ ITEM_CODES = tuple(f"R{i}" for i in range(1, 13))
 VERDICTS = ("pass", "fail", "uncertain")
 MAX_REQUESTS = 2            # 최초 1회 + 형식 오류 재요청 1회
 RECENT_POSTS_LIMIT = 30
-MAX_TOKENS = 16000
+MAX_TOKENS = 4000           # R1~R12 판정 JSON 은 짧다
+# temperature 를 받는 모델에는 PLAN 대로 0 을 준다. Opus 5·Sonnet 5 등 최신 모델은 temperature 를 보내면 400 이다.
+TEMPERATURE_ZERO_MODELS = ("claude-haiku-4-5",)
+# 생각(thinking)을 꺼서 비용을 줄이는 모델. Sonnet 5 는 기본이 adaptive thinking 이고 disabled 를 받는다.
+THINKING_OFF_MODELS = ("claude-sonnet-5",)
+
+
+def request_params(model: str) -> dict:
+    """모델 외의 요청 설정. 합격 기록 해시에 들어가므로 바꾸면 재시험이 필요하다.
+    anthropic SDK 1.x 는 temperature 인자를 없앴다. 아직 temperature 를 받는 모델(Haiku 4.5)에는 SDK 문서대로
+    extra_body 로 넘긴다 (PLAN Step 4-B: temperature 0)."""
+    params = {"max_tokens": MAX_TOKENS}
+    if model.startswith(TEMPERATURE_ZERO_MODELS):
+        params["extra_body"] = {"temperature": 0}
+    if model.startswith(THINKING_OFF_MODELS):
+        params["thinking"] = {"type": "disabled"}
+    return params
 
 ITEM_SCHEMA = {
     "type": "object",
@@ -75,8 +92,9 @@ def system_prompt(cfg: Config, prompt_path=PROMPT_PATH, plan_path=PLAN_PATH) -> 
 
 
 def prompt_hash(cfg: Config, prompt_path=PROMPT_PATH, plan_path=PLAN_PATH) -> str:
-    """검수 프롬프트(규칙 전문 포함)와 출력 스키마의 해시. 시험지 합격 기록과 대조한다."""
-    blob = system_prompt(cfg, prompt_path, plan_path) + json.dumps(OUTPUT_SCHEMA, sort_keys=True)
+    """검수 프롬프트(규칙 전문 포함)·출력 스키마·요청 설정의 해시. 시험지 합격 기록과 대조한다."""
+    blob = (system_prompt(cfg, prompt_path, plan_path) + json.dumps(OUTPUT_SCHEMA, sort_keys=True)
+            + json.dumps(request_params(cfg.reviewer_model), sort_keys=True))
     return hashlib.sha256(blob.encode("utf-8")).hexdigest()
 
 
@@ -203,7 +221,7 @@ def make_anthropic_call(api_key: str, model: str) -> CallFn:
     def call(system: str, user: str) -> tuple:
         resp = client.messages.create(
             model=model,
-            max_tokens=MAX_TOKENS,
+            **request_params(model),
             system=system,
             messages=[{"role": "user", "content": user}],
             output_config={"format": {"type": "json_schema", "schema": OUTPUT_SCHEMA}},

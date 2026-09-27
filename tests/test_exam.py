@@ -141,7 +141,7 @@ def test_passed_state_is_valid(cfg, passed_state):
 
 
 def test_model_change_invalidates(cfg, passed_state):
-    other = dataclasses.replace(cfg, reviewer_model="claude-sonnet-5")
+    other = dataclasses.replace(cfg, reviewer_model="claude-opus-5" if cfg.reviewer_model != "claude-opus-5" else "claude-sonnet-5")
     ok, reason = exam.exam_status(other, **passed_state)
     assert not ok and "검수 모델" in reason
 

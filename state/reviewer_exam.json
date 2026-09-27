@@ -1,0 +1,18 @@
+{
+  "passed": true,
+  "passed_at": "2026-09-27T14:47:49.009000+00:00",
+  "reviewer_model": "claude-sonnet-5",
+  "prompt_hash": "abe9f05c4198665f39c7bc25e9426854219b59a71b46b27e93851e046089c464",
+  "cases_hash": "04ccf18e6b833b21d54475b6b58fccb408204c3dc4940bf2ea3ea65a36a9c863",
+  "summary": {
+    "passed": true,
+    "completed": true,
+    "problem_blocked": "20/20",
+    "normal_passed": "8/10",
+    "missed_problems": [],
+    "rejected_normals": [
+      "N09",
+      "N10"
+    ]
+  }
+}
