@@ -63,6 +63,14 @@ class MemoryStore:
     def upsert_coupang(self, rows: list[dict]) -> None:
         self.coupang = {**getattr(self, "coupang", {}), **{r["date"]: copy.deepcopy(r) for r in rows}}
 
+    def list_coupang(self, start: str, end: str) -> list[dict]:
+        """start <= date <= end (YYYY-MM-DD) 인 쿠팡 일별 행."""
+        rows = [r for d, r in getattr(self, "coupang", {}).items() if start <= d <= end]
+        return copy.deepcopy(sorted(rows, key=lambda r: r["date"]))
+
+    def all_metrics(self, media_ids) -> list[dict]:
+        return copy.deepcopy([m for m in self.metrics if m["threads_media_id"] in media_ids])
+
     # system_state / events
     def get_state(self, key: str, default=None):
         return copy.deepcopy(self.state.get(key, default))
@@ -127,6 +135,16 @@ class SupabaseStore:
     def upsert_coupang(self, rows: list[dict]) -> None:
         if rows:
             self.db.table("metrics_coupang_daily").upsert(rows).execute()
+
+    def list_coupang(self, start: str, end: str) -> list[dict]:
+        return (self.db.table("metrics_coupang_daily").select("*").gte("date", start).lte("date", end)
+                .order("date").execute().data)
+
+    def all_metrics(self, media_ids) -> list[dict]:
+        ids = list(media_ids)
+        if not ids:
+            return []
+        return self.db.table("metrics_post").select("*").in_("threads_media_id", ids).execute().data
 
     def get_state(self, key: str, default=None):
         data = self.db.table("system_state").select("value").eq("key", key).limit(1).execute().data

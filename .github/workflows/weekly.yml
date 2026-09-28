@@ -1,0 +1,53 @@
+name: Weekly
+
+# 매주 일요일 21:00 KST: 주간 리포트 + AI 리뷰 "다음 주 바꿀 3가지" (weekly_report.py).
+# 리포트는 텔레그램으로 보내고, 파일은 이 실행의 아티팩트(weekly-report)로 90일 보관한다.
+# AI 리뷰 제안은 자동 적용하지 않는다. 수동 실행의 dry_run 은 텔레그램으로 보내지 않는다.
+
+on:
+  schedule:
+    - cron: '0 12 * * 0'     # 일요일 12:00 UTC = 일요일 21:00 KST
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: '텔레그램으로 보내지 않고 파일만 만듦'
+        required: false
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+
+jobs:
+  weekly:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.11'
+          cache: pip
+      - run: pip install -r requirements.txt
+      - name: Weekly report
+        env:
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+          INPUT_DRY_RUN: ${{ inputs.dry_run }}
+        run: |
+          if [ "${INPUT_DRY_RUN}" = "true" ]; then
+            python weekly_report.py --dry-run
+          else
+            python weekly_report.py
+          fi
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: weekly-report
+          path: reports/*.md
+          if-no-files-found: ignore
+          retention-days: 90

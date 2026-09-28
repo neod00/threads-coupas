@@ -12,3 +12,4 @@ venv/
 
 # 로컬 산출물
 .tmp/
+reports/
