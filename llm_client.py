@@ -3,6 +3,7 @@
 
 가져온 것
   - 기본 모델이 사용량 한도(quota·spend cap·429 exceeded)에 걸리면 대체 모델로 넘어간다 (대체 키가 있을 때만)
+  - 서버 혼잡(503) 같은 일시 오류가 재시도 뒤에도 이어져도 대체 모델로 넘어간다
   - 503·unavailable·timeout 같은 일시 오류만 지수 백오프로 재시도
   - 출력 한도에서 끊긴 응답은 실패로 처리 (잘린 글이 초안이 되지 않게)
 바꾼 것
@@ -138,6 +139,10 @@ def make_complete(model: str, api_key: str | None, fallback_model: str | None = 
                     log.warning(f"[LLM] {model} 사용량 한도 → {fallback[2]} 로 대체")
                     return _call(fallback[0], fallback[1], fallback[2], system, user, temperature)
                 attempt += 1
+                if attempt > MAX_RETRIES and is_retryable_error(e) and fallback:
+                    # 서버 혼잡(503)이 재시도 뒤에도 이어지면 대체 모델로 넘어간다 (2026-09-28: Gemini 503 로 held 발생)
+                    log.warning(f"[LLM] {model} 일시 오류가 계속됨 → {fallback[2]} 로 대체")
+                    return _call(fallback[0], fallback[1], fallback[2], system, user, temperature)
                 if attempt > MAX_RETRIES or not is_retryable_error(e):
                     raise
                 wait = 2 ** attempt * 2

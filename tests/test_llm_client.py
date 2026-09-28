@@ -62,6 +62,13 @@ def test_temporary_error_gives_up_after_retry(calls):
     assert len(calls.log) == 2
 
 
+def test_persistent_overload_falls_back(calls):
+    calls.plan["gemini"] = [Exception("503 UNAVAILABLE high demand"), Exception("503 UNAVAILABLE high demand")]
+    calls.plan["openai"] = ['{"body": "o"}']
+    assert llm_client.make_complete(G, "g-key", O, "o-key", sleep=lambda s: None)("s", "u", 0.3) == '{"body": "o"}'
+    assert calls.log == [("gemini", G), ("gemini", G), ("openai", O)]
+
+
 def test_other_error_not_retried(calls):
     calls.plan["gemini"] = [Exception("400 INVALID_ARGUMENT")]
     with pytest.raises(Exception, match="400"):
