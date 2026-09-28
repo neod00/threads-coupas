@@ -164,12 +164,13 @@ def build_payload(post_type: str, picked: Sequence[Product], tariff: Tariff, tip
         result["a"]["note"], result["b"]["note"] = a.note, b.note
         return result
     if post_type == "tip":
+        # tip 은 숫자 가벼운 신뢰 쌓기 글이다 (2026-09-28). 요금 추정치(원)와 "누진 N단계 가정"은 넣지 않는다:
+        # 넣으면 생성기가 요금을 섞어 쓰고 검수자가 가정 문구 누락(R8)·구간 모순(R6)으로 막아 held 가 쌓였다.
         payload = {
             "tip_topic": tip_topic or TIP_TOPICS[0],
             "tariff": {
                 "tariff_effective_date": tariff.effective_date.isoformat(),
                 "season": tariff.season,
-                "assumed_tier": tariff.assumed_tier_for_posts,
                 "tiers": [
                     {"tier": i, "upto_kwh": calculator.plain(t.upto_kwh) if t.upto_kwh is not None else None,
                      "rate_per_kwh": calculator.plain(t.rate_per_kwh)}
@@ -179,7 +180,10 @@ def build_payload(post_type: str, picked: Sequence[Product], tariff: Tariff, tip
         }
         if picked:
             p = picked[0]
-            payload["example"] = {"category": p.category, **calculator.monthly_cost(p.power_w, p.default_hours, tariff)}
+            usage = calculator.monthly_cost(p.power_w, p.default_hours, tariff)
+            # 사용량 예시만 남긴다 (소비전력·시간·일수·kWh). 요금·가정 구간은 빼 둔다.
+            payload["example"] = {"category": p.category,
+                                  **{k: usage[k] for k in ("power_w", "hours_per_day", "days_per_month", "monthly_kwh")}}
         return payload
     raise ValueError(f"알 수 없는 유형: {post_type}")
 

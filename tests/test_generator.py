@@ -57,7 +57,8 @@ def history(counts: dict, days_ago: float = 1, status="published"):
 @pytest.mark.parametrize("post_type", ["calc", "compare", "tip"])
 def test_three_hook_candidates_saved(cfg, tariff, products, post_type):
     picked = generator.pick_products(products, "compare", NOW.date()) if post_type == "compare" else [products[0]]
-    post = gen(cfg, tariff, products, FakeLLM(ok()), post_type=post_type, picked=picked)
+    draft = ok(body="누진 구간은 한 달 총 사용량이 기준입니다.") if post_type == "tip" else ok()
+    post = gen(cfg, tariff, products, FakeLLM(draft), post_type=post_type, picked=picked)
     assert post["status"] == "draft"
     assert [h["style"] for h in post["hook_candidates"]] == ["question", "result", "compare"]
     assert all(h["text"] for h in post["hook_candidates"])
@@ -198,6 +199,24 @@ def test_tip_layout_hook_on_first_line(cfg, tariff, products):
     assert cfg.disclosure_text not in post["text"]
     assert (post["has_link"], post["link_url"], post["variant"], post["product_ids"]) == (False, None, None, [])
     assert post["calc_payload"]["tariff"]["tiers"][1] == {"tier": 2, "upto_kwh": 400, "rate_per_kwh": 214.6}
+
+
+def test_tip_payload_has_usage_but_no_cost_or_assumed_tier(tariff, products):
+    # tip 은 숫자 가벼운 글: 요금 추정치·"누진 N단계 가정"은 데이터에 없다 (2026-09-28)
+    p = generator.build_payload("tip", [products[0]], tariff, generator.TIP_TOPICS[0])
+    assert p["example"] == {"category": "heater", "power_w": 2000, "hours_per_day": 4, "days_per_month": 30,
+                            "monthly_kwh": 240}
+    assert "assumed_tier" not in p["tariff"]
+    flat = json.dumps(p, ensure_ascii=False)
+    assert "est_added_cost" not in flat and "assumption_text" not in flat
+
+
+def test_tip_with_cost_estimate_is_blocked_by_guard(cfg, tariff, products):
+    # 팁 글에 요금 추정("약 5만 8,600원")을 쓰면 데이터에 없는 숫자라 가드가 막는다
+    llm = FakeLLM(*[ok(body="2,000W 히터를 하루 4시간 쓰면 약 5만 8,600원이 추가됩니다.")] * 3)
+    post = gen(cfg, tariff, products, llm, post_type="tip", tip_topic=generator.TIP_TOPICS[0])
+    assert post["status"] == "held"
+    assert any("[G3]" in p for a in post["guard_log"]["attempts"] for p in a["problems"])
 
 
 def test_compare_uses_same_hours_for_both(cfg, tariff, products):
