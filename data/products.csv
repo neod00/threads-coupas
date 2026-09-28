@@ -1,6 +1,6 @@
 product_id,name,category,power_w,default_hours,link,note
 h01,한경희 2단 카본히터,heater,900,4,https://link.coupang.com/a/holG7bYEO4,"자동 좌우회전, 2단 출력"
 h02,유니맥스 오방향 전기난로,heater,2000,4,https://link.coupang.com/a/holNcSYOrs,다섯 방향으로 열을 내는 난로
-m01,한일의료기 워셔블 온수매트,mat,280,8,https://link.coupang.com/a/holQGUVbgG,"세탁 가능한 매트, 반려견용"
+b01,한일의료기 따스온 탄소매트 전기요,blanket,160,8,https://link.coupang.com/a/hpHjEeCVqe,"세탁 가능한 탄소매트 전기요"
 f01,한경희 욕실용 전기 온풍기,fan_heater,2000,1,https://link.coupang.com/a/holUnWPYYe,"욕실용, 리모컨 조작"
 u01,한경희 대용량 가습기,humidifier,25,10,https://link.coupang.com/a/holZ4dauUC,"대용량 투명 물통, 노즐 회전"
