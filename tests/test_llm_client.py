@@ -56,10 +56,47 @@ def test_temporary_error_retried_once(calls):
 
 
 def test_temporary_error_gives_up_after_retry(calls):
-    calls.plan["gemini"] = [Exception("503"), Exception("503")]
+    # 대체 모델이 있으면 1회 재시도 후 대체로, 없으면 3회까지 재시도 후 포기
+    calls.plan["gemini"] = [Exception("503")] * 4
+    waits = []
     with pytest.raises(Exception, match="503"):
+        llm_client.make_complete(G, "g-key", sleep=waits.append)("s", "u", 0.3)
+    assert len(calls.log) == 4 and waits == [4, 8, 16]
+
+
+PER_MINUTE = ("429 RESOURCE_EXHAUSTED. Quota exceeded for metric generate_content_free_tier_requests, "
+              "quotaId: GenerateRequestsPerMinutePerProjectPerModel-FreeTier. Please retry in 21.18s.")
+PER_DAY = ("429 RESOURCE_EXHAUSTED. Quota exceeded, quotaId: GenerateRequestsPerDayPerProjectPerModel-FreeTier. "
+           "Please retry in 41.6s.")
+
+
+def test_per_minute_limit_waits_and_retries(calls):
+    calls.plan["gemini"] = [Exception(PER_MINUTE), '{"body": "g"}']
+    waits = []
+    assert llm_client.make_complete(G, "g-key", sleep=waits.append)("s", "u", 0.3) == '{"body": "g"}'
+    assert waits == [pytest.approx(22.18)] and len(calls.log) == 2
+
+
+def test_per_minute_limit_gives_up_after_two_waits(calls):
+    calls.plan["gemini"] = [Exception(PER_MINUTE)] * 3
+    with pytest.raises(Exception, match="RESOURCE_EXHAUSTED"):
         llm_client.make_complete(G, "g-key", sleep=lambda s: None)("s", "u", 0.3)
-    assert len(calls.log) == 2
+    assert len(calls.log) == 3
+
+
+def test_daily_limit_does_not_wait(calls):
+    # 하루 한도는 기다려도 풀리지 않으므로 바로 포기 (대체 모델이 있으면 대체)
+    calls.plan["gemini"] = [Exception(PER_DAY)]
+    waits = []
+    with pytest.raises(Exception):
+        llm_client.make_complete(G, "g-key", sleep=waits.append)("s", "u", 0.3)
+    assert waits == []
+
+
+def test_per_minute_delay_parsing():
+    assert llm_client.per_minute_retry_delay(Exception(PER_MINUTE)) == pytest.approx(22.18)
+    assert llm_client.per_minute_retry_delay(Exception(PER_DAY)) is None
+    assert llm_client.per_minute_retry_delay(Exception("GenerateRequestsPerMinute, retry in 300s")) == 65.0
 
 
 def test_persistent_overload_falls_back(calls):

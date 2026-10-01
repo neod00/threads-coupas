@@ -15,6 +15,7 @@
 from __future__ import annotations
 
 import logging
+import re
 import time
 from typing import Callable
 
@@ -23,7 +24,8 @@ from settings import provider_of
 log = logging.getLogger("threads_coupas")
 
 MAX_OUTPUT_TOKENS = 1024
-MAX_RETRIES = 1
+MAX_RETRIES = 1             # 대체 모델이 있을 때 일시 오류 재시도 횟수 (없으면 3)
+MAX_RATE_WAITS = 2          # 분당 한도에 걸렸을 때 기다렸다 재시도하는 횟수
 
 
 class LLMError(RuntimeError):
@@ -46,6 +48,16 @@ def is_usage_limit_error(error: BaseException) -> bool:
         or "quota" in text
         or ("429" in text and "exceeded" in text)
     )
+
+
+def per_minute_retry_delay(error: BaseException) -> float | None:
+    """분당 요청 한도(무료 요금제 5회/분 등)에 걸렸으면 기다릴 초. 하루 한도·지출 한도면 None (기다려도 안 풀림)."""
+    text = _error_text(error)
+    if "perminute" not in text.replace("_", "").replace(" ", ""):
+        return None
+    m = re.search(r"retry in ([\d.]+)s", text) or re.search(r"retrydelay'?\"?:\s*'?\"?(\d+)s", text.replace(" ", ""))
+    delay = float(m.group(1)) if m else 30.0
+    return min(delay + 1, 65.0)
 
 
 def is_retryable_error(error: BaseException) -> bool:
@@ -127,26 +139,36 @@ def make_complete(model: str, api_key: str | None, fallback_model: str | None = 
             raise LLMError(f"대체 모델로 지원하지 않는 제공사입니다: {fallback_model}")
         fallback = (fb_provider, fallback_api_key, fallback_model)
 
+    # 대체 모델이 없으면 일시 오류(503)를 더 끈기 있게 재시도한다 (4·8·16초)
+    max_retries = MAX_RETRIES if fallback else 3
+
     def complete(system: str, user: str, temperature: float) -> str:
-        attempt = 0
+        attempt, rate_waits = 0, 0
         while True:
             try:
                 return _call(provider, api_key, model, system, user, temperature)
             except LLMError:
                 raise
             except Exception as e:  # SDK 오류 형식이 버전마다 달라 문자열로 분류한다
+                delay = per_minute_retry_delay(e)
+                if delay is not None and rate_waits < MAX_RATE_WAITS:
+                    # 분당 한도는 잠깐 기다리면 풀린다 (2026-10-02: 무료 요금제 5회/분으로 held 발생)
+                    rate_waits += 1
+                    log.warning(f"[LLM] {model} 분당 요청 한도, {delay:.0f}초 기다렸다 재시도 ({rate_waits}/{MAX_RATE_WAITS})")
+                    sleep(delay)
+                    continue
                 if is_usage_limit_error(e) and fallback:
                     log.warning(f"[LLM] {model} 사용량 한도 → {fallback[2]} 로 대체")
                     return _call(fallback[0], fallback[1], fallback[2], system, user, temperature)
                 attempt += 1
-                if attempt > MAX_RETRIES and is_retryable_error(e) and fallback:
+                if attempt > max_retries and is_retryable_error(e) and fallback:
                     # 서버 혼잡(503)이 재시도 뒤에도 이어지면 대체 모델로 넘어간다 (2026-09-28: Gemini 503 로 held 발생)
                     log.warning(f"[LLM] {model} 일시 오류가 계속됨 → {fallback[2]} 로 대체")
                     return _call(fallback[0], fallback[1], fallback[2], system, user, temperature)
-                if attempt > MAX_RETRIES or not is_retryable_error(e):
+                if attempt > max_retries or not is_retryable_error(e):
                     raise
                 wait = 2 ** attempt * 2
-                log.warning(f"[LLM] {model} 일시 오류, {wait}초 후 재시도 ({attempt}/{MAX_RETRIES}): {e}")
+                log.warning(f"[LLM] {model} 일시 오류, {wait}초 후 재시도 ({attempt}/{max_retries}): {str(e)[:120]}")
                 sleep(wait)
 
     return complete

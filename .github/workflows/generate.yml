@@ -32,7 +32,7 @@ jobs:
   generate:
     if: vars.AUTO_PUBLISH_DISABLED != 'true'
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    timeout-minutes: 40      # Gemini 분당 한도 대기·재시도를 감안
     env:
       AUTO_PUBLISH_DISABLED: ${{ vars.AUTO_PUBLISH_DISABLED }}
     steps:
