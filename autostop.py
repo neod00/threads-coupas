@@ -6,6 +6,7 @@
   1 내 게시물 답글에 스팸·신고·광고충·사기·허위    watch_replies.py (Step 8)
   2 발행 실패 2회 연속                         publisher.py (Step 6) → record_publish_result
   3 하루 생성분 중 held 비율 50% 초과            generate 파이프라인 → check_held_ratio
+    (API 호출 실패로 생긴 held 는 비율에서 빼고 알림만 보낸다 — 2026-10-01 결정)
   4 AI 검수자 응답 3회 연속 형식 오류             generate 파이프라인 → record_review_status
   5 시험지에 케이스 추가 (재시험 합격 전까지)       exam.exam_status 가 케이스 해시 불일치로 불합격 → 발행기(Step 6)가 거부하고 정지
 """
@@ -88,14 +89,38 @@ def record_publish_result(store, notifier, success: bool, detail: dict | None = 
         trigger(store, notifier, f"발행 실패 {n}회 연속", detail)
 
 
+def is_api_error_hold(post: dict) -> bool:
+    """글 품질이 아니라 API 호출 실패(LLM 생성·검수 호출 거절, 서버 혼잡, 크레딧 부족)로 held 된 글인지."""
+    if post.get("status") != "held":
+        return False
+    review = post.get("review_result") or {}
+    if review.get("status") == "format_error" and review.get("errors") and \
+            all("호출 실패" in e for e in review["errors"]):
+        return True
+    attempts = (post.get("guard_log") or {}).get("attempts") or []
+    problems = attempts[-1]["problems"] if attempts else []
+    return bool(problems) and all(p.startswith("LLM 호출 실패") or "호출 실패" in p for p in problems)
+
+
 def check_held_ratio(store, notifier, generated: list[dict]) -> float:
-    """하루 생성분 중 held 비율이 50%를 넘으면 정지 (조건 3). 비율을 돌려준다."""
-    if not generated:
+    """하루 생성분 중 held 비율이 50%를 넘으면 정지 (조건 3). 비율을 돌려준다.
+    API 호출 실패로 생긴 held 는 생성기 품질 신호가 아니므로 비율 계산에서 뺀다 (2026-10-01 결정, A안).
+    대신 그런 글이 있으면 정지하지 않고 알림만 보낸다."""
+    api_errors = [p for p in generated if is_api_error_hold(p)]
+    judged = [p for p in generated if p not in api_errors]
+    if api_errors:
+        try:
+            notifier.send(f"[알림] API 호출 오류로 보류된 글 {len(api_errors)}개 (자동 정지 대상 아님). "
+                          "Gemini 혼잡·한도, Anthropic 크레딧을 확인하세요.")
+        except Exception as e:
+            log.error(f"[알림] 전송 실패: {e}")
+    if not judged:
         return 0.0
-    ratio = sum(p["status"] == "held" for p in generated) / len(generated)
+    ratio = sum(p["status"] == "held" for p in judged) / len(judged)
     if ratio > MAX_HELD_RATIO:
         trigger(store, notifier, f"하루 생성분 중 held 비율 {ratio:.0%} (50% 초과, 생성기 이상 신호)",
-                {"generated": len(generated), "held": [p["id"] for p in generated if p["status"] == "held"]})
+                {"generated": len(generated), "api_error_held": len(api_errors),
+                 "held": [p["id"] for p in judged if p["status"] == "held"]})
     return ratio
 
 

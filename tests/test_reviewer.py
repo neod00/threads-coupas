@@ -236,11 +236,92 @@ def test_anthropic_request_shape(monkeypatch):
 
     captured.clear()
     reviewer.make_anthropic_call("k", "claude-sonnet-5")("sys", "user")
-    assert captured["thinking"] == {"type": "disabled"}   # 비용 절감: 생각 끔
+    assert captured["thinking"] == {"type": "adaptive"}   # 짧게 생각하고 판정 (오판 줄이기)
+    assert captured["output_config"] == {"format": {"type": "json_schema", "schema": reviewer.OUTPUT_SCHEMA},
+                                         "effort": "low"}
     assert "extra_body" not in captured                   # Sonnet 5 는 temperature 를 보내지 않는다
 
 
 def test_request_params_change_invalidates_prompt_hash(cfg, monkeypatch):
-    base = reviewer.prompt_hash(cfg)
+    import dataclasses
+
+    claude = dataclasses.replace(cfg, reviewer_model="claude-sonnet-5")
+    base = reviewer.prompt_hash(claude)
     monkeypatch.setattr(reviewer, "MAX_TOKENS", 1234)
-    assert reviewer.prompt_hash(cfg) != base
+    assert reviewer.prompt_hash(claude) != base
+    # 검수 제공사가 바뀌면(요청 설정이 바뀌므로) 해시도 바뀐다
+    assert reviewer.prompt_hash(dataclasses.replace(cfg, reviewer_model="gpt-4.1")) != reviewer.prompt_hash(claude)
+
+
+def test_openai_review_request_shape(monkeypatch):
+    import openai
+
+    captured = {}
+
+    class FakeCompletions:
+        def create(self, **kwargs):
+            captured.update(kwargs)
+            msg = pytypes.SimpleNamespace(content="{}", refusal=None)
+            return pytypes.SimpleNamespace(choices=[pytypes.SimpleNamespace(message=msg, finish_reason="stop")])
+
+    class FakeOpenAI:
+        def __init__(self, api_key, timeout=None):
+            self.chat = pytypes.SimpleNamespace(completions=FakeCompletions())
+
+    monkeypatch.setattr(openai, "OpenAI", FakeOpenAI)
+    assert reviewer.make_openai_call("k", "gpt-4.1")("sys", "user") == ("end_turn", "{}")
+    assert captured["temperature"] == 0                                    # PLAN Step 4-B
+    assert captured["response_format"]["json_schema"] == {"name": "review", "strict": True,
+                                                          "schema": reviewer.OUTPUT_SCHEMA}
+    assert captured["messages"][0] == {"role": "system", "content": "sys"}
+
+    captured.clear()
+    reviewer.make_openai_call("k", "gpt-5.4-mini")("sys", "user")
+    assert captured["reasoning_effort"] == "low"                           # 추론 모델: 짧게 생각
+    assert "temperature" not in captured                                   # 추론 모델은 temperature 를 받지 않는다
+
+
+def test_openai_refusal_and_truncation_are_format_errors(monkeypatch, cfg):
+    import openai
+
+    def fake(finish, refusal=None):
+        class C:
+            def create(self, **kw):
+                msg = pytypes.SimpleNamespace(content="{\"R1\"", refusal=refusal)
+                return pytypes.SimpleNamespace(choices=[pytypes.SimpleNamespace(message=msg, finish_reason=finish)])
+
+        return lambda api_key, timeout=None: pytypes.SimpleNamespace(chat=pytypes.SimpleNamespace(completions=C()))
+
+    for finish, refusal in (("length", None), ("stop", "I can't help")):
+        monkeypatch.setattr(openai, "OpenAI", fake(finish, refusal))
+        result = reviewer.Reviewer(cfg, reviewer.make_openai_call("k", "gpt-4.1")).review({"type": "calc", "text": "x"})
+        assert result.status == "format_error"
+
+
+def test_r1_r8_decided_by_code(cfg, tariff, products):
+    # LLM 이 "가정 문구가 다르다"고 잘못 막아도, 코드가 문구를 확인하면 R8 은 pass 가 된다
+    import generator
+
+    payload = generator.build_payload("calc", [products[0]], tariff)
+    post = {"type": "calc", "has_link": True, "link_url": products[0].link, "variant": "link_in_body",
+            "text": f"{cfg.disclosure_text}\n{CALC_HOOK}\n\n{CALC_BODY}", "calc_payload": payload}
+    wrong = verdicts(R8=("fail", False), R1=("uncertain", False))
+    result = reviewer.Reviewer(cfg, FakeClaude(wrong)).review(post)
+    assert result.status == "approved"
+    assert result.items["R8"]["reason"].startswith("(코드 확인)")
+    # 반대로 가정 문구가 빠졌는데 LLM 이 통과시켜도 코드가 막는다
+    missing = dict(post, text=post["text"].replace("누진 2단계 가정, 기본요금·감면 제외 추정으로 ", ""))
+    result = reviewer.Reviewer(cfg, FakeClaude(verdicts())).review(missing)
+    assert result.status == "fail" and result.items["R8"]["verdict"] == "fail"
+    # 대가성 문구가 빠지면 R1 fail
+    no_disclosure = dict(post, text=post["text"].split("\n", 1)[1])
+    assert reviewer.Reviewer(cfg, FakeClaude(verdicts())).review(no_disclosure).items["R1"]["verdict"] == "fail"
+
+
+def test_make_call_picks_provider_and_needs_key(cfg):
+    from settings import ConfigError, Secrets
+
+    with pytest.raises(ConfigError, match="API 키가 없습니다"):
+        reviewer.make_call("gpt-4.1", Secrets())
+    assert callable(reviewer.make_call("gpt-4.1", Secrets(openai_api_key="k")))
+    assert callable(reviewer.make_call("claude-sonnet-5", Secrets(anthropic_api_key="k")))

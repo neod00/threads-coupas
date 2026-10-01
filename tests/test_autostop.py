@@ -101,6 +101,40 @@ def test_held_ratio(env, statuses, stopped):
     assert autostop.is_stopped(store) is stopped
 
 
+def _api_error_post(i, kind):
+    if kind == "llm":
+        return {"id": f"e{i}", "status": "held",
+                "guard_log": {"attempts": [{"problems": ["LLM 호출 실패: 503 UNAVAILABLE"]}]}}
+    return {"id": f"e{i}", "status": "held", "guard_log": {"attempts": [{"problems": ["[검수] 응답 형식 오류 2회"]}]},
+            "review_result": {"status": "format_error", "items": None,
+                              "errors": ["호출 실패: credit balance is too low", "호출 실패: credit balance is too low"]}}
+
+
+def test_api_error_holds_do_not_count_toward_ratio(env):
+    # A안: API 호출 실패로 생긴 held 는 비율에서 빼고 알림만 (2026-10-01)
+    store, notifier = env
+    posts = [_api_error_post(0, "llm"), _api_error_post(1, "credit"), _api_error_post(2, "llm"),
+             {"id": "ok", "status": "approved"}]
+    assert autostop.check_held_ratio(store, notifier, posts) == 0.0
+    assert not autostop.is_stopped(store)
+    assert "API 호출 오류로 보류된 글 3개" in notifier.sent[-1]
+
+
+def test_quality_holds_still_stop_even_with_api_errors(env):
+    store, notifier = env
+    quality = {"id": "q", "status": "held", "guard_log": {"attempts": [{"problems": ["[R3] uncertain: 안전 암시"]}]},
+               "review_result": {"status": "uncertain", "items": {}, "errors": []}}
+    posts = [_api_error_post(0, "llm"), quality, dict(quality, id="q2"), {"id": "ok", "status": "approved"}]
+    assert autostop.check_held_ratio(store, notifier, posts) == pytest.approx(2 / 3)
+    assert autostop.is_stopped(store)
+
+
+def test_only_api_errors_no_stop(env):
+    store, notifier = env
+    autostop.check_held_ratio(store, notifier, [_api_error_post(i, "credit") for i in range(4)])
+    assert not autostop.is_stopped(store)
+
+
 # 조건 1: 답글 키워드 (Step 8 답글 감시가 부른다)
 @pytest.mark.parametrize("text, stopped", [
     ("이거 광고충 계정이네", True), ("스팸 신고합니다", True), ("허위 아닌가요", True),

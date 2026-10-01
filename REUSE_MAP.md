@@ -219,6 +219,7 @@ Threads_COUPAS/
 1. **생성 LLM — 결정 (2026-09-27): Gemini 기본 + OpenAI 대체.** 티스토리 앱과 같은 구조이고 기존 `GEMINI_API_KEY`를 쓴다. `OPENAI_API_KEY`는 선택.
 2. **Supabase — 결정 (2026-09-27): 새 프로젝트.** 로옥션 DB와 섞지 않는다.
 3. **검수 LLM — 결정 (2026-09-27, PLAN v2): Claude (`claude-opus-5`).** 생성(Google)·대체(OpenAI)와 회사가 다르다. Opus 5는 temperature 파라미터를 받지 않으므로(보내면 400), PLAN의 "temperature 0" 대신 JSON 스키마 출력과 고정 프롬프트로 판정을 일정하게 한다 (Step 4-B).
+   - **2026-10-02 임시 변경:** Anthropic 크레딧이 콘솔에는 보이지만 API 에서 거절돼, 검수를 OpenAI `gpt-5.4-mini`(reasoning low)로 바꿨다. 생성 대체 모델은 같은 회사라 껐다. R1·R8 은 코드 가드(G2·G6) 결과로 판정한다. 시험 20/20·10/10 합격. Anthropic 이 풀리면 Claude Sonnet 5(생각 low)로 되돌리고 재시험한다.
 4. **알림 — 결정 (2026-09-27): 텔레그램.**
 5. **가정 문구 — 결정: "기본요금·감면 제외 추정".** 금지어 "할인"과 겹치지 않게 한다. PLAN v2 본문도 고쳤다.
 6. **대가성 문구·훅·링크는 코드가 조립한다.** LLM은 `hook_candidates`(3개)·`body`·`reply_line`·`topic_tag`만 JSON으로 준다. 훅을 다른 후보로 바꿔 끼우려면 훅과 본문이 분리돼 있어야 하기 때문이다. DB에는 조립된 `text`·`reply_text`를 저장한다. `posts`에는 PLAN 표에 없는 `topic_tag` 칸을 추가한다.

@@ -146,11 +146,11 @@ def main() -> int:
     logging.basicConfig(level=logging.INFO, format="%(levelname)s %(message)s", stream=sys.stderr)
     try:
         cfg, secrets = load_config(), load_secrets()
-        secrets.require("anthropic_api_key")
+        call = reviewer_mod.make_call(cfg.reviewer_model, secrets)
     except ConfigError as e:
         print(f"오류: {e}")
         return 1
-    rev = reviewer_mod.Reviewer(cfg, reviewer_mod.make_anthropic_call(secrets.anthropic_api_key, cfg.reviewer_model))
+    rev = reviewer_mod.Reviewer(cfg, call)
     summary = run_exam(rev, cfg)
     write_state(summary, cfg)
     print(json.dumps({k: v for k, v in summary.items() if k != "results"}, ensure_ascii=False, indent=2))

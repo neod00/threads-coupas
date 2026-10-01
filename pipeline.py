@@ -133,7 +133,7 @@ def main(argv=None) -> int:
     try:
         cfg, secrets = load_config(), load_secrets()
         tariff, products = load_tariff(), load_products()
-        secrets.require("anthropic_api_key")
+        review_call = reviewer_mod.make_call(cfg.reviewer_model, secrets)
         store = open_store(secrets)
         fb = cfg.generator_fallback_model
         complete = make_complete(cfg.generator_model, secrets.api_key_for(provider_of(cfg.generator_model)),
@@ -142,7 +142,7 @@ def main(argv=None) -> int:
         log.error(f"설정 오류: {e}")
         return 1
     result = run_generate(store, cfg, tariff, products, complete=complete,
-                          review_call=reviewer_mod.make_anthropic_call(secrets.anthropic_api_key, cfg.reviewer_model),
+                          review_call=review_call,
                           notifier=make_notifier(secrets), now=datetime.now(timezone.utc),
                           variant=args.variant, save=not args.dry_run)
     summary = [{"type": p["type"], "status": p["status"], "scheduled_at": p["scheduled_at"],

@@ -213,7 +213,7 @@ def test_project_config_matches_plan():
     assert set(settings.REQUIRED_BANNED_WORDS) <= set(cfg.banned_words)
     assert set(settings.REQUIRED_BANNED_HOOK_PHRASES) <= set(cfg.banned_hook_phrases)
     assert (cfg.generator_model, cfg.generator_fallback_model, cfg.reviewer_model) == (
-        "gemini-3.8-flash", "gpt-4.1-mini", "claude-sonnet-5")
+        "gemini-3.8-flash", None, "gpt-5.4-mini")
     assert cfg.digest_time_kst.strftime("%H:%M") == "21:00"
     assert cfg.test_start_date is None
 
@@ -221,12 +221,12 @@ def test_project_config_matches_plan():
 # ── 8장: 생성 모델과 검수 모델의 제공사가 같으면 실행 거부 ─────────────────────
 
 @pytest.mark.parametrize("changes", [
-    {"generator_model": "claude-sonnet-5"},                         # 생성도 Anthropic
-    {"reviewer_model": "gemini-2.5-pro"},                           # 검수도 Google
-    {"reviewer_model": "gpt-5"},                                    # 대체 생성 모델(gpt-4.1-mini)과 같은 OpenAI
+    {"generator_model": "claude-sonnet-5", "reviewer_model": "claude-opus-5"},     # 생성도 검수도 Anthropic
+    {"reviewer_model": "gemini-2.5-pro"},                                          # 검수도 Google
+    {"generator_fallback_model": "gpt-4.1-mini", "reviewer_model": "gpt-4.1"},    # 대체 생성 모델과 검수가 같은 OpenAI
 ])
 def test_same_provider_for_generator_and_reviewer_rejected(raw, changes):
-    raw.update(changes)
+    raw.update({"generator_model": "gemini-3.8-flash", "generator_fallback_model": None, **changes})
     with pytest.raises(ConfigError, match="제공사가 같습니다"):
         settings.parse_config(raw)
 
