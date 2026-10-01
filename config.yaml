@@ -79,4 +79,4 @@ criteria:
 digest_time_kst: "21:00"          # 일일 요약 발송 시각 (Step 5)
 
 # 첫 실제 발행일 (YYYY-MM-DD). 주차 계산 기준. 실제 발행 전에는 비워 둔다.
-test_start_date: null
+test_start_date: 2026-10-03   # 첫 실제 발행일 (2026-10-02 결정, 연습 모드 관찰 없이 바로 시작)
