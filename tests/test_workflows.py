@@ -28,7 +28,7 @@ def test_every_workflow_has_manual_run_with_dry_run(name):
 
 
 @pytest.mark.parametrize("name, cron", [
-    ("publish.yml", "5 * * * *"),       # 매시 5분
+    ("publish.yml", "17,47 * * * *"),   # 매시 17분·47분
     ("generate.yml", "0 11 * * *"),     # 20:00 KST
     ("digest.yml", "0 12 * * *"),       # 21:00 KST
 ])

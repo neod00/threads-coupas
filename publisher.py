@@ -1,5 +1,5 @@
 """
-발행기 (PLAN v2 Step 6). GitHub Actions 가 매시 5분에 실행한다. 한 번에 글 1개만 발행한다.
+발행기 (PLAN v2 Step 6). GitHub Actions 가 매시 17분·47분(1시간에 2번)에 실행한다. 한 번에 글 1개만 발행한다.
 파라미터는 THREADS_API_NOTES.md (2026-09-27 Meta 공식 문서 확인)를 따른다.
 
 실행 순서 (run_once)
