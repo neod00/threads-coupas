@@ -49,12 +49,32 @@ MAX_ATTEMPTS = 3            # 최초 1회 + 재생성 2회 (PLAN Step 4)
 TOPIC_TAG_MAX = 50
 
 TIP_TOPICS = (
-    "누진 구간 때문에 겨울 전기요금이 갑자기 오르는 이유",
-    "소비전력(W)으로 한 달 사용량(kWh)을 가늠하는 법",
+    "겨울 전기요금 고지서가 갑자기 뛰는 이유, 누진 구간",
     "난방가전을 들이기 전에 지난달 고지서 사용량부터 확인하기",
-    "같은 난방가전도 사용시간을 줄이면 요금이 어떻게 달라지는지",
-    "전기요·온수매트의 온도 단계와 사용시간 관리",
+    "같은 난방가전도 하루 한 시간만 줄이면 한 달 사용량이 얼마나 달라지는지",
+    "소비전력(W)과 사용시간만 알면 한 달 사용량(kWh)을 가늠할 수 있다",
+    "전기요·온수매트는 온도 단계와 켜 두는 시간으로 관리하기",
 )
+
+# 일반 독자가 자기 이야기로 느끼게 하는 생활 장면. 가정형("~하는 경우")으로만 쓰게 하고 경험 표현은 금지한다.
+# 숫자·안전·건강·효능 표현을 넣지 않는다 (가드 G3·G4, 검수 R3).
+SCENE_HINTS = {
+    "heater": ("퇴근 후 저녁에 거실이나 작은 방에서 켜는 경우", "아침에 출근 준비를 하는 동안 방에서 켜는 경우",
+               "재택근무 중 책상 옆에서 켜 두는 경우"),
+    "fan_heater": ("샤워 전후 욕실에서 잠깐 켜는 경우", "추운 아침 욕실이나 현관 앞에서 짧게 켜는 경우"),
+    "mat": ("잠자리에 눕기 전 침대를 미리 데우는 경우", "겨울 밤 침대에서 켜 두는 경우"),
+    "blanket": ("잠자리에 눕기 전 이불 속을 미리 데우는 경우", "거실 소파에서 몸을 덮고 쉬는 경우"),
+    "humidifier": ("겨울 저녁 거실에서 켜 두는 경우", "재택근무 하는 방에서 켜 두는 경우"),
+    "dehumidifier": ("빨래를 실내에 널어 말릴 때 켜는 경우",),
+    "dryer": ("퇴근 후 빨래를 한꺼번에 돌리는 경우",),
+}
+
+
+def scene_hint(category: str, day: date | None) -> str | None:
+    scenes = SCENE_HINTS.get(category)
+    if not scenes:
+        return None
+    return scenes[(day.toordinal() if day else 0) % len(scenes)]
 
 CompleteFn = Callable[[str, str, float], str]
 CheckFn = Callable[[dict], list]     # 조립된 게시물 → 문제 목록 (빈 목록 = 통과)
@@ -72,7 +92,8 @@ def system_prompt(cfg: Config, post_type: str, variant: str | None) -> str:
         if variant == "link_in_reply" else "null"
     )
     number_rule = (
-        "calc·compare 훅에는 계산 데이터의 숫자를 1개 이상 넣습니다 (월 kWh, 추정 요금, 두 제품의 요금 차이 등)."
+        "calc·compare 훅에는 계산 데이터의 숫자를 1개 이상 넣되, 전기요금(원)을 앞세웁니다 (월 추정 요금, 하루 환산 요금, "
+        "두 제품의 요금 차이). kWh·W 는 훅에 꼭 넣지 않아도 됩니다."
         if post_type != "tip" else "tip 훅에는 숫자가 없어도 됩니다. 숫자를 쓰면 계산 데이터의 값만 씁니다."
     )
     return _read_prompt("threads_base.md").format(
@@ -148,11 +169,15 @@ def hook_style_order(history: Iterable[dict], now: datetime) -> list[str]:
     return sorted(HOOK_STYLES, key=lambda s: (counts[s], HOOK_STYLES.index(s)))
 
 
-def build_payload(post_type: str, picked: Sequence[Product], tariff: Tariff, tip_topic: str | None = None) -> dict:
+def build_payload(post_type: str, picked: Sequence[Product], tariff: Tariff, tip_topic: str | None = None,
+                  day: date | None = None) -> dict:
     """LLM·가드·검수자가 함께 보는 calc_payload. 게시물의 모든 숫자는 여기에 있어야 한다."""
     if post_type == "calc":
         p = picked[0]
-        return {"product": {"name": p.name, "note": p.note}, **calculator.monthly_cost(p.power_w, p.default_hours, tariff)}
+        payload = {"product": {"name": p.name, "note": p.note}, **calculator.monthly_cost(p.power_w, p.default_hours, tariff)}
+        if hint := scene_hint(p.category, day):
+            payload["situation_hint"] = hint
+        return payload
     if post_type == "compare":
         a, b = picked
         # 같은 조건 비교: 두 상품 모두 a 의 기본 사용시간을 쓴다.
@@ -162,6 +187,8 @@ def build_payload(post_type: str, picked: Sequence[Product], tariff: Tariff, tip
             tariff,
         )
         result["a"]["note"], result["b"]["note"] = a.note, b.note
+        if hint := scene_hint(a.category, day):
+            result["situation_hint"] = hint
         return result
     if post_type == "tip":
         # tip 은 숫자 가벼운 신뢰 쌓기 글이다 (2026-09-28). 요금 추정치(원)와 "누진 N단계 가정"은 넣지 않는다:
@@ -290,7 +317,7 @@ def generate_post(post_type: str, picked: Sequence[Product], tariff: Tariff, cfg
     link = None if post_type == "tip" else picked[0].link
     style_order = hook_style_order(history, now)
 
-    payload = build_payload(post_type, picked, tariff, tip_topic)
+    payload = build_payload(post_type, picked, tariff, tip_topic, day=now.date())
     system = system_prompt(cfg, post_type, variant)
     attempts, feedback, previous = [], None, None
     fields, candidates, passed, final = None, [], False, False

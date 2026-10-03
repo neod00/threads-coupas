@@ -7,9 +7,11 @@
 계산식
   monthly_kwh        = power_w × hours_per_day × days_per_month / 1000
   est_added_cost_won = monthly_kwh × 가정 누진 구간 단가 × surcharge_multiplier
+  est_daily_cost_won = est_added_cost_won ÷ days_per_month (일반 독자는 W·kWh 보다 "하루 얼마"를 먼저 본다)
 
 반올림 규칙 (모두 ROUND_HALF_UP, 계산은 Decimal 로 정확하게 한다)
   - 요금은 반올림하지 않은 kWh 로 계산한 뒤 100원 단위로 반올림한다 ("약 ○만 ○,○00원" 추정치).
+  - 하루 요금은 반올림된 월 요금 ÷ 월 사용일수를 10원 단위로 반올림한다 ("하루 약 ○,○○0원" 환산). 글에 적힌 월 요금과 맞아떨어진다.
   - 표시용 kWh 는 소수 첫째 자리까지 반올림한다 (정수면 정수로 둔다).
   - 비교의 요금 차이는 반올림된 두 요금의 차다. 글에 적힌 두 요금을 빼면 같은 값이 나온다.
 
@@ -35,6 +37,7 @@ from settings import PROJECT_ROOT, ConfigError, _parse_date
 TARIFF_PATH = PROJECT_ROOT / "data" / "tariff.yaml"
 DEFAULT_DAYS_PER_MONTH = 30
 COST_ROUND_UNIT = Decimal(100)
+DAILY_COST_ROUND_UNIT = Decimal(10)
 KWH_ROUND_UNIT = Decimal("0.1")
 
 _TARIFF_KEYS = {"effective_date", "season", "tiers", "surcharge_multiplier", "assumed_tier_for_posts"}
@@ -191,6 +194,8 @@ def monthly_cost(power_w, hours_per_day, tariff: Tariff,
     kwh = power * hours * days_per_month / 1000
     exact_cost = kwh * rate * tariff.surcharge_multiplier
     cost = int((exact_cost / COST_ROUND_UNIT).quantize(Decimal(1), ROUND_HALF_UP) * COST_ROUND_UNIT)
+    daily = int((Decimal(cost) / days_per_month / DAILY_COST_ROUND_UNIT).quantize(Decimal(1), ROUND_HALF_UP)
+                * DAILY_COST_ROUND_UNIT)
 
     return {
         "power_w": plain(power),
@@ -202,6 +207,8 @@ def monthly_cost(power_w, hours_per_day, tariff: Tariff,
         "surcharge_multiplier": plain(tariff.surcharge_multiplier),
         "est_added_cost_won": cost,
         "est_added_cost_label": won_label(cost),
+        "est_daily_cost_won": daily,
+        "est_daily_cost_label": won_label(daily),
         "assumption_text": assumption_text(tier),
         "tariff_effective_date": tariff.effective_date.isoformat(),
     }

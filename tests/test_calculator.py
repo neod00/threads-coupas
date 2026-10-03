@@ -158,3 +158,25 @@ def test_invalid_tariff_rejected(changes, message):
 def test_float_rates_kept_exact(tariff):
     assert str(tariff.tiers[1].rate_per_kwh) == "214.6"
     assert tariff.effective_date == date(2026, 10, 1)
+
+
+# ── 하루 환산 요금 (2026-10-03: 일반 독자는 W·kWh 보다 "하루 얼마"를 먼저 본다) ──
+
+def test_daily_cost_is_rounded_monthly_cost_divided_by_days(tariff):
+    # 58,600 / 30 = 1,953.3 → 10원 반올림 1,950
+    r = calculator.monthly_cost(2000, 4, tariff)
+    assert r["est_daily_cost_won"] == 1_950
+    assert r["est_daily_cost_label"] == "1,950원"
+    # 38,400 / 30 = 1,280 (딱 떨어짐)
+    r = calculator.monthly_cost(1500, 3.5, tariff)
+    assert (r["est_daily_cost_won"], r["est_daily_cost_label"]) == (1_280, "1,280원")
+    # 1,900 / 31 = 61.3 → 60
+    r = calculator.monthly_cost(55, 8, tariff, days_per_month=31, tier=1)
+    assert (r["est_daily_cost_won"], r["est_daily_cost_label"]) == (60, "60원")
+
+
+def test_compare_items_carry_daily_cost(tariff):
+    r = calculator.compare({"name": "A", "power_w": 2000, "hours_per_day": 4},
+                           {"name": "B", "power_w": 1500, "hours_per_day": 4}, tariff)
+    assert r["a"]["est_daily_cost_won"] == 1_950
+    assert r["b"]["est_daily_cost_won"] > 0

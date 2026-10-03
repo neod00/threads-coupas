@@ -7,11 +7,13 @@ Step 3 생성기 테스트. LLM 은 가짜 함수로 바꿔 네트워크 없이 
 그 밖에: 규칙 3 (대가성 문구·링크·훅 위치는 코드가 조립), 훅 교체 → 재생성 → held 흐름
 """
 import json
-from datetime import datetime, timedelta, timezone
+import re
+from datetime import date, datetime, timedelta, timezone
 
 import pytest
 
 import generator
+from products import CATEGORIES
 
 NOW = datetime(2026, 11, 2, 11, 0, tzinfo=timezone.utc)      # KST 20:00
 BODY = "누진 2단계 가정, 기본요금·감면 제외 추정으로 약 5만 8,600원이 추가로 나옵니다.\n\n작은 방이라면 저전력 모드부터 써보는 게 낫습니다."
@@ -298,3 +300,40 @@ def test_pick_rotates_by_day(products):
 def test_compare_needs_same_category_pair(products):
     with pytest.raises(ValueError, match="같은 카테고리"):
         generator.pick_products([products[0], products[2]], "compare", NOW.date())
+
+
+# ── 2026-10-03 일반 독자용 개선: 요금 앞세우기·생활 장면 ─────────────────────
+
+def test_calc_payload_has_daily_cost_and_scene(cfg, tariff, products):
+    heater = next(p for p in products if p.category == "heater")
+    payload = generator.build_payload("calc", [heater], tariff, day=date(2026, 10, 4))
+    assert payload["est_daily_cost_label"].endswith("원")
+    assert payload["situation_hint"] in generator.SCENE_HINTS["heater"]
+    # 장면이 날짜마다 돌아가며 나온다
+    hints = {generator.build_payload("calc", [heater], tariff, day=date(2026, 10, d))["situation_hint"] for d in range(1, 7)}
+    assert len(hints) == len(generator.SCENE_HINTS["heater"])
+
+
+def test_scene_hints_are_safe_for_guard_and_reviewer(cfg):
+    banned = list(cfg.banned_words) + ["아이", "노인", "강아지", "반려", "숙면", "건강", "써봤", "사용해보니"]
+    for category, scenes in generator.SCENE_HINTS.items():
+        assert category in CATEGORIES
+        for text in scenes:
+            assert not re.search(r"\d", text), text           # 숫자는 계산 데이터에서만 (규칙 7)
+            assert text.endswith("경우"), text                  # 경험이 아니라 가정형
+            assert not [w for w in banned if w in text], text
+
+
+def test_tip_payload_stays_free_of_costs(cfg, tariff, products):
+    payload = generator.build_payload("tip", [products[0]], tariff, generator.TIP_TOPICS[0], day=date(2026, 10, 4))
+    assert "situation_hint" not in payload
+    assert "est_daily_cost_won" not in json.dumps(payload)
+
+
+def test_system_prompt_puts_money_before_kwh(cfg):
+    calc = generator.system_prompt(cfg, "calc", "link_in_body")
+    assert "전기요금(원)을 앞세웁니다" in calc
+    assert "situation_hint" in calc and "가정형" in calc
+    assert "경험" in calc                                       # 사용 경험 금지는 그대로 (PLAN 규칙)
+    tip = generator.system_prompt(cfg, "tip", None)
+    assert "숫자가 없어도 됩니다" in tip
