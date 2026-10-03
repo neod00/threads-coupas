@@ -30,17 +30,22 @@ def test_every_workflow_has_manual_run_with_dry_run(name):
 @pytest.mark.parametrize("name, cron", [
     ("publish.yml", "3 */4 * * *"),     # 예비. 주 실행은 Supabase pg_cron (db/publish_cron.sql)
     ("generate.yml", "0 14 * * *"),     # 예비. 주 실행은 Supabase pg_cron 20:00 KST (db/generate_cron.sql)
-    ("digest.yml", "0 12 * * *"),       # 21:00 KST
 ])
 def test_schedules(name, cron):
     assert load(name)["on"]["schedule"] == [{"cron": cron}]
 
 
 def test_digest_cron_matches_config():
-    cron = load("digest.yml")["on"]["schedule"][0]["cron"]
+    """일일 요약은 Supabase pg_cron 이 깨운다 (GitHub 예약이 있으면 요약이 두 번 간다)."""
+    assert "schedule" not in load("digest.yml")["on"]
+    sql = (PROJECT_ROOT / "db" / "digest_cron.sql").read_text(encoding="utf-8")
+    cron = re.search(r"'threads-coupas-digest',\s*'([^']+)'", sql).group(1)
     minute, hour = map(int, cron.split()[:2])
     t = load_config().digest_time_kst
     assert ((hour + 9) % 24, minute) == (t.hour, t.minute)
+    assert "/repos/neod00/threads-coupas/actions/workflows/digest.yml/dispatches" in sql
+    assert '{"ref": "main", "inputs": {"dry_run": "false"}}' in sql
+    assert "github_pat_" not in sql and "gh_dispatch_token" in sql
 
 
 def test_publish_safety_switches():

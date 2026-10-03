@@ -374,7 +374,7 @@ LLM에 넘기는 것: 계산 결과 JSON, 상품 `note`, 금지어 목록, 길�
 |---|---|---|
 | `generate.yml` | 매일 20:00 KST (Supabase pg_cron → workflow_dispatch, `db/generate_cron.sql`). 예비로 GitHub 예약 `0 14 * * *` | 다음날 분량 생성 → 가드 → 검수 → 슬롯 배정 |
 | `publish.yml` | 매시 12분·42분 (Supabase pg_cron → workflow_dispatch, `db/publish_cron.sql`). 예비로 GitHub 예약 `3 */4 * * *` | 답글 감시(최근 72시간 발행 글) → 자동 정지 조건 확인 → `approved`이고 `scheduled_at <= now`인 글 **1개만** 발행 |
-| `digest.yml` | 매일 21:00 KST | 일일 요약 발송 |
+| `digest.yml` | 매일 21:00 KST (Supabase pg_cron → workflow_dispatch, `db/digest_cron.sql`; GitHub 예약 없음) | 일일 요약 발송 |
 | `metrics.yml` | 매일 09:00 KST | 발행 후 24시간·72시간이 지난 글의 인사이트 수집 |
 | `weekly.yml` | 매주 일요일 21:00 KST | 주간 리포트 + AI 리뷰 생성 |
 | `cancel_post.yml` | 수동 실행 | 입력한 post_id를 `cancelled`로 변경 |

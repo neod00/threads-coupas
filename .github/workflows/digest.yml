@@ -1,12 +1,12 @@
 name: Digest
 
 # 매일 21:00 KST: 일일 요약을 텔레그램으로 보낸다 (digest.py). 읽지 않아도 발행은 진행된다.
-# config.yaml 의 digest_time_kst 를 바꾸면 아래 cron 도 같이 바꾼다 (cron 은 UTC).
+# 실행: Supabase pg_cron 이 매일 12:00 UTC(21:00 KST)에 workflow_dispatch 로 깨운다 (db/digest_cron.sql).
+# GitHub 예약은 몇 시간씩 밀리고, 예비로 두면 요약이 두 번 가므로 두지 않는다.
+# config.yaml 의 digest_time_kst 를 바꾸면 db/digest_cron.sql 의 cron 도 같이 바꾼다 (UTC).
 # 수동 실행의 dry_run 은 보내지 않고 로그에만 출력한다.
 
 on:
-  schedule:
-    - cron: '0 12 * * *'     # 12:00 UTC = 21:00 KST
   workflow_dispatch:
     inputs:
       dry_run:
