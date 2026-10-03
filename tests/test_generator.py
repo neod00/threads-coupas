@@ -337,3 +337,16 @@ def test_system_prompt_puts_money_before_kwh(cfg):
     assert "경험" in calc                                       # 사용 경험 금지는 그대로 (PLAN 규칙)
     tip = generator.system_prompt(cfg, "tip", None)
     assert "숫자가 없어도 됩니다" in tip
+
+
+def test_tip_topics_are_varied_and_safe(cfg):
+    topics = generator.TIP_TOPICS
+    assert len(topics) >= 9 and len(set(topics)) == len(topics)   # 최근 글과 겹쳐 R9 로 막히는 일을 줄인다
+    for t in topics:
+        assert not re.search(r"\d", t), t                          # 주제에 숫자를 넣지 않는다 (규칙 7)
+        assert not [w for w in cfg.banned_words if w in t], t
+    # 하루 두 개씩 연속으로 뽑아도 같은 주제가 이틀 연속 나오지 않는다
+    for ordinal in range(100, 140):
+        today = {topics[(ordinal + i) % len(topics)] for i in range(2)}
+        tomorrow = {topics[(ordinal + 1 + i) % len(topics)] for i in range(2)}
+        assert len(today) == 2 and len(tomorrow) == 2
