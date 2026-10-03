@@ -29,7 +29,7 @@ def test_every_workflow_has_manual_run_with_dry_run(name):
 
 @pytest.mark.parametrize("name, cron", [
     ("publish.yml", "3 */4 * * *"),     # 예비. 주 실행은 Supabase pg_cron (db/publish_cron.sql)
-    ("generate.yml", "0 11 * * *"),     # 20:00 KST
+    ("generate.yml", "0 14 * * *"),     # 예비. 주 실행은 Supabase pg_cron 20:00 KST (db/generate_cron.sql)
     ("digest.yml", "0 12 * * *"),       # 21:00 KST
 ])
 def test_schedules(name, cron):
@@ -86,3 +86,14 @@ def test_supabase_publish_cron():
     job = load("publish.yml")["jobs"]["publish"]
     assert "vars.DRY_RUN == 'false'" in job["env"]["DRY_RUN"]
     assert job["if"] == "vars.AUTO_PUBLISH_DISABLED != 'true'"
+
+
+def test_supabase_generate_cron():
+    """생성도 Supabase pg_cron 이 20:00 KST(11:00 UTC)에 깨운다. 토큰은 publish_cron.sql 이 Vault 에 넣어 둔 것을 쓴다."""
+    sql = (PROJECT_ROOT / "db" / "generate_cron.sql").read_text(encoding="utf-8")
+    assert "'0 11 * * *'" in sql
+    assert "/repos/neod00/threads-coupas/actions/workflows/generate.yml/dispatches" in sql
+    assert '{"ref": "main", "inputs": {"dry_run": "false"}}' in sql
+    assert "github_pat_" not in sql and "__GH_DISPATCH_TOKEN__" not in sql
+    assert "gh_dispatch_token" in sql
+    assert load("generate.yml")["jobs"]["generate"]["if"] == "vars.AUTO_PUBLISH_DISABLED != 'true'"
