@@ -28,7 +28,7 @@ def test_every_workflow_has_manual_run_with_dry_run(name):
 
 
 @pytest.mark.parametrize("name, cron", [
-    ("publish.yml", "17,47 * * * *"),   # 매시 17분·47분
+    ("publish.yml", "3 */4 * * *"),     # 예비. 주 실행은 Supabase pg_cron (db/publish_cron.sql)
     ("generate.yml", "0 11 * * *"),     # 20:00 KST
     ("digest.yml", "0 12 * * *"),       # 21:00 KST
 ])
@@ -73,3 +73,16 @@ def test_referenced_secrets_exist_in_env_example(name):
 @pytest.mark.parametrize("name", WORKFLOWS)
 def test_least_privilege(name):
     assert load(name)["permissions"] == {"contents": "read"}
+
+
+def test_supabase_publish_cron():
+    """GitHub 예약이 밀려서 Supabase pg_cron 이 publish.yml 을 30분마다 깨운다. 토큰은 저장소에 없다."""
+    sql = (PROJECT_ROOT / "db" / "publish_cron.sql").read_text(encoding="utf-8")
+    assert "'12,42 * * * *'" in sql
+    assert "/repos/neod00/threads-coupas/actions/workflows/publish.yml/dispatches" in sql
+    assert '{"ref": "main", "inputs": {"dry_run": "false"}}' in sql
+    assert "github_pat_" not in sql and "__GH_DISPATCH_TOKEN__" in sql
+    # 실제 발행 여부는 여전히 저장소 변수 DRY_RUN·AUTO_PUBLISH_DISABLED 가 정한다
+    job = load("publish.yml")["jobs"]["publish"]
+    assert "vars.DRY_RUN == 'false'" in job["env"]["DRY_RUN"]
+    assert job["if"] == "vars.AUTO_PUBLISH_DISABLED != 'true'"
