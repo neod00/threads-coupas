@@ -24,7 +24,7 @@ TOMORROW = NOW.date() + timedelta(days=1)
 
 def smart_llm(system, user, temperature):
     """계산 데이터(JSON)를 읽어 그 값으로 가드를 통과하는 초안을 만든다."""
-    payload = json.loads(user.split("계산 데이터(JSON):\n", 1)[1].split("\n\n이전 초안", 1)[0])
+    payload = json.loads(user.split("계산 데이터(JSON):\n", 1)[1].split("\n\n이전 초안", 1)[0].split("\n\n최근에 올린 글", 1)[0])
     if "tip_topic" in payload:
         hooks = ["겨울 전기요금은 왜 오를까요?", "누진 구간이 요금을 올립니다", "사용량과 단가, 무엇이 더 클까요?"]
         body = "누진 구간은 사용량이 늘수록 단가가 올라갑니다.\n\n지난달 고지서의 사용량부터 확인해 보세요."
@@ -153,3 +153,35 @@ def test_generated_posts_flow_into_publisher_dry_run(env, cfg, tariff, products,
     first = min(store.posts.values(), key=lambda p: p["scheduled_at"])
     assert result["post_id"] == first["id"]
     assert api.requests[0]["params"]["text"] == first["text"]
+
+
+def test_second_day_uses_different_subjects(env, cfg, tariff, products):
+    """2026-10-04: 같은 상품·같은 숫자의 글이 다음 날 또 나와 검수 R9 로 막히고 자동 정지됐다."""
+    store, _ = env
+    import generator
+    first = generate(env, cfg, tariff, products)["posts"]
+    for p in first:                                     # 첫날 글이 모두 발행됐다고 본다
+        store.update_post(p["id"], {"status": "published"})
+    second = pipeline.run_generate(store, cfg, tariff, products, complete=smart_llm, review_call=review(),
+                                   notifier=env[1], now=NOW + timedelta(days=1), env={})["posts"]
+    assert len(second) == 4
+    keys1, keys2 = ({generator.subject_key(p) for p in posts} for posts in (first, second))
+    assert None not in keys1 | keys2 and not keys1 & keys2
+
+
+def test_generator_and_reviewer_see_used_posts(env, cfg, tariff, products):
+    store, _ = env
+    seen = {"gen": [], "rev": []}
+
+    def llm(system, user, temperature):
+        seen["gen"].append(user)
+        return smart_llm(system, user, temperature)
+
+    def rev(system, user):
+        seen["rev"].append(json.loads(user)["recent_posts"])
+        return review()(system, user)
+
+    pipeline.run_generate(store, cfg, tariff, products, complete=llm, review_call=rev, notifier=env[1], now=NOW, env={})
+    # 같은 실행에서 먼저 승인된 글도 다음 글의 반복 판정에 들어간다 (tip 2개가 서로 비교된다)
+    assert seen["rev"][0] == [] and len(seen["rev"][-1]) == 3
+    assert "최근에 올린 글" in seen["gen"][-1]             # 둘째 tip 은 첫째 tip 을 보고 쓴다

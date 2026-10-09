@@ -47,6 +47,7 @@ HOOK_WINDOW_DAYS = 7
 USED_STATUSES = ("approved", "published")           # 본문에 실제로 쓰인 훅으로 세는 상태
 MAX_ATTEMPTS = 3            # 최초 1회 + 재생성 2회 (PLAN Step 4)
 TOPIC_TAG_MAX = 50
+RECENT_TEXTS_FOR_GENERATOR = 5   # 생성기에 보여 줄 같은 유형의 최근 글 수
 
 TIP_TOPICS = (
     "겨울 전기요금 고지서가 갑자기 뛰는 이유, 누진 구간",
@@ -109,8 +110,16 @@ def system_prompt(cfg: Config, post_type: str, variant: str | None) -> str:
     )
 
 
-def user_message(post_type: str, payload: dict, feedback: list | None = None, previous: dict | None = None) -> str:
+def user_message(post_type: str, payload: dict, feedback: list | None = None, previous: dict | None = None,
+                 recent_texts: Sequence[str] = ()) -> str:
     msg = _read_prompt(f"tpl_{post_type}.md") + "\n\n계산 데이터(JSON):\n" + json.dumps(payload, ensure_ascii=False, indent=1)
+    if recent_texts:
+        # 생성기가 최근 글을 모르면 같은 구조를 되풀이해 검수 R9(반복)에서 막힌다 (2026-10-04 자동 정지 원인).
+        msg += (
+            "\n\n최근에 올린 글입니다. 이 글들과 첫 문장, 문단 순서, 결론 문장이 겹치지 않게 다른 각도로 씁니다. "
+            "여기 있는 숫자·표현을 가져오지 않습니다 (숫자는 계산 데이터의 값만 씁니다).\n"
+            + "\n".join(f"[최근 글 {i}]\n{t}" for i, t in enumerate(recent_texts[:RECENT_TEXTS_FOR_GENERATOR], start=1))
+        )
     if feedback:
         msg += "\n\n이전 초안의 문제점:\n" + "\n".join(f"- {p}" for p in feedback)
         if previous:
@@ -150,6 +159,82 @@ def pick_products(products: Sequence[Product], post_type: str, day: date,
     return [_rotate(fresh or ordered, day, offset)]
 
 
+# ── 주제(상품 × 사용시간, 팁 주제) 돌려 쓰기 ─────────────────────────
+# 상품이 몇 개뿐이면 같은 상품·같은 숫자의 글이 며칠마다 되풀이되어 검수 R9(반복)에 막힌다 (2026-10-04 자동 정지).
+# 같은 상품도 하루 사용시간이 다르면 요금이 다른 글이 되므로, (상품, 사용시간) 조합을 가장 오래 안 쓴 것부터 고른다.
+
+def hour_options(default_hours) -> list:
+    """상품 기본 사용시간, 그 절반, 1.5배 (정수 시간, 1~24)."""
+    options = [default_hours]
+    for value in (float(default_hours) / 2, float(default_hours) * 1.5):
+        hours = min(24, max(1, int(value + 0.5)))
+        if hours not in options:
+            options.append(hours)
+    return options
+
+
+def _hours_key(hours) -> str:
+    return f"{float(hours):g}"
+
+
+def subject_key(post: dict) -> str | None:
+    """posts 행이 다룬 주제. 같은 키 = 같은 숫자(또는 같은 팁 주제)의 글."""
+    payload = post.get("calc_payload") or {}
+    ids = "+".join(sorted(post.get("product_ids") or []))
+    try:
+        if post.get("type") == "tip":
+            return f"tip|{payload['tip_topic']}"
+        if post.get("type") == "calc":
+            return f"calc|{ids}|{_hours_key(payload['hours_per_day'])}"
+        if post.get("type") == "compare":
+            return f"compare|{ids}|{_hours_key(payload['a']['hours_per_day'])}"
+    except (KeyError, TypeError, ValueError):
+        pass
+    return None
+
+
+def subjects(products: Sequence[Product], post_type: str) -> list[dict]:
+    """고를 수 있는 모든 주제: {key, picked, hours, tip_topic}."""
+    ordered = sorted(products, key=lambda p: p.product_id)
+    if post_type == "tip":
+        return [{"key": f"tip|{t}", "picked": [], "hours": None, "tip_topic": t} for t in TIP_TOPICS]
+    if post_type == "calc":
+        return [{"key": f"calc|{p.product_id}|{_hours_key(h)}", "picked": [p], "hours": h, "tip_topic": None}
+                for p in ordered for h in hour_options(p.default_hours)]
+    if post_type == "compare":
+        out = []
+        for pair in itertools.combinations(ordered, 2):
+            if pair[0].category != pair[1].category or pair[0].power_w == pair[1].power_w:
+                continue
+            a, b = sorted(pair, key=lambda p: (-p.power_w, p.product_id))
+            ids = "+".join(sorted((a.product_id, b.product_id)))
+            out += [{"key": f"compare|{ids}|{_hours_key(h)}", "picked": [a, b], "hours": h, "tip_topic": None}
+                    for h in hour_options(a.default_hours)]
+        return out
+    raise ValueError(f"알 수 없는 유형: {post_type}")
+
+
+def pick_subject(products: Sequence[Product], post_type: str, day: date, used: Sequence[dict] = (),
+                 offset: int = 0) -> dict:
+    """가장 오래 안 쓴 주제를 고른다. used: 실제로 쓰인(approved·published) posts 행, 오래된 것 → 최신 순.
+    한 번도 안 쓴 주제가 먼저고, 그 안에서는 최근에 다룬 상품을 뒤로 미룬다. 동률이면 날짜로 돌린다."""
+    candidates = subjects(products, post_type)
+    if not candidates:
+        raise ValueError(f"{post_type} 에 쓸 주제가 없습니다.")
+    last_key, last_product = {}, {}
+    for i, post in enumerate(used):
+        if key := subject_key(post):
+            last_key[key] = i
+        for pid in post.get("product_ids") or []:
+            last_product[pid] = i
+
+    def score(c):
+        return (last_key.get(c["key"], -1), max((last_product.get(p.product_id, -1) for p in c["picked"]), default=-1))
+
+    best = min(score(c) for c in candidates)
+    return _rotate([c for c in candidates if score(c) == best], day, offset)
+
+
 def _as_utc(value) -> datetime | None:
     if isinstance(value, datetime):
         dt = value
@@ -174,20 +259,22 @@ def hook_style_order(history: Iterable[dict], now: datetime) -> list[str]:
 
 
 def build_payload(post_type: str, picked: Sequence[Product], tariff: Tariff, tip_topic: str | None = None,
-                  day: date | None = None) -> dict:
+                  day: date | None = None, hours=None) -> dict:
     """LLM·가드·검수자가 함께 보는 calc_payload. 게시물의 모든 숫자는 여기에 있어야 한다."""
     if post_type == "calc":
         p = picked[0]
-        payload = {"product": {"name": p.name, "note": p.note}, **calculator.monthly_cost(p.power_w, p.default_hours, tariff)}
+        payload = {"product": {"name": p.name, "note": p.note},
+                   **calculator.monthly_cost(p.power_w, hours or p.default_hours, tariff)}
         if hint := scene_hint(p.category, day):
             payload["situation_hint"] = hint
         return payload
     if post_type == "compare":
         a, b = picked
-        # 같은 조건 비교: 두 상품 모두 a 의 기본 사용시간을 쓴다.
+        # 같은 조건 비교: 두 상품 모두 같은 사용시간(지정이 없으면 a 의 기본 사용시간)을 쓴다.
+        same_hours = hours or a.default_hours
         result = calculator.compare(
-            {"name": a.name, "power_w": a.power_w, "hours_per_day": a.default_hours},
-            {"name": b.name, "power_w": b.power_w, "hours_per_day": a.default_hours},
+            {"name": a.name, "power_w": a.power_w, "hours_per_day": same_hours},
+            {"name": b.name, "power_w": b.power_w, "hours_per_day": same_hours},
             tariff,
         )
         result["a"]["note"], result["b"]["note"] = a.note, b.note
@@ -307,7 +394,8 @@ def _run_checks(post: dict, checks: Sequence[CheckFn]) -> tuple[list, list[dict]
 def generate_post(post_type: str, picked: Sequence[Product], tariff: Tariff, cfg: Config, complete: CompleteFn, *,
                   variant: str = "link_in_body", tip_topic: str | None = None,
                   checks: Sequence[CheckFn] = (), history: Iterable[dict] = (),
-                  max_attempts: int = MAX_ATTEMPTS, now: datetime | None = None) -> dict:
+                  max_attempts: int = MAX_ATTEMPTS, now: datetime | None = None,
+                  hours=None, recent_texts: Sequence[str] = ()) -> dict:
     """posts 행 하나(dict)를 돌려준다. status 는 approved(가드+검수 통과), draft(가드만 통과, 검수 없음) 또는 held.
     코드 가드(guard.check_post)는 항상 먼저 실행된다 (빼거나 끌 수 없음).
     checks: 가드 다음에 실행할 검사 함수들 (Step 4-B 검수자). history: 훅 선택용 최근 posts 행."""
@@ -321,7 +409,7 @@ def generate_post(post_type: str, picked: Sequence[Product], tariff: Tariff, cfg
     link = None if post_type == "tip" else picked[0].link
     style_order = hook_style_order(history, now)
 
-    payload = build_payload(post_type, picked, tariff, tip_topic, day=now.date())
+    payload = build_payload(post_type, picked, tariff, tip_topic, day=now.date(), hours=hours)
     system = system_prompt(cfg, post_type, variant)
     attempts, feedback, previous = [], None, None
     fields, candidates, passed, final = None, [], False, False
@@ -331,7 +419,7 @@ def generate_post(post_type: str, picked: Sequence[Product], tariff: Tariff, cfg
         # 재시도는 같은 글을 되풀이하지 않도록 온도를 올린다 (로옥션 방식)
         temperature = 0.3 if attempt == 1 else 0.7
         try:
-            draft = parse_draft(complete(system, user_message(post_type, payload, feedback, previous), temperature))
+            draft = parse_draft(complete(system, user_message(post_type, payload, feedback, previous, recent_texts), temperature))
             problems = draft_problems(draft, variant)
         except Exception as e:      # 네트워크·API 오류도 이력에 남기고 다음 시도로 넘어간다
             draft, problems = {}, [f"LLM 호출 실패: {e}"]

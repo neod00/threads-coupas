@@ -28,7 +28,7 @@ from settings import KST, Config
 
 log = logging.getLogger("threads_coupas")
 
-RECENT_PRODUCT_DAYS = 3         # 최근 며칠 동안 쓴 상품은 피한다
+USED_STATUSES = ("approved", "published")    # 주제 돌려 쓰기·반복 판정에 넣는 글
 HOOK_HISTORY_DAYS = 7
 
 
@@ -73,21 +73,27 @@ def run_generate(store, cfg: Config, tariff, products, *, complete, review_call,
 
     week_ago = (now - timedelta(days=HOOK_HISTORY_DAYS)).astimezone(timezone.utc).isoformat()
     history = store.list_posts(since=week_ago)
-    recent_cut = (now - timedelta(days=RECENT_PRODUCT_DAYS)).astimezone(timezone.utc).isoformat()
-    recent_ids = {pid for p in history if p["created_at"] >= recent_cut for pid in p.get("product_ids") or []}
-    recent_texts = [p["text"] for p in reversed(store.list_posts(["published"]))][:reviewer_mod.RECENT_POSTS_LIMIT]
+    # 실제로 쓰인 글(발행됨 + 발행 대기). 주제 돌려 쓰기와 반복 판정에 쓴다. 오래된 것 → 최신 순.
+    used = store.list_posts(USED_STATUSES)
     rev = reviewer_mod.Reviewer(cfg, review_call)
 
     made = []
     for i, post_type in enumerate(types):
-        pick_type = "calc" if post_type == "tip" else post_type
-        picked = generator.pick_products(products, pick_type, tomorrow, recent_ids=sorted(recent_ids), offset=i)
-        recent_ids.update(p.product_id for p in picked)
-        topic = generator.TIP_TOPICS[(tomorrow.toordinal() + i) % len(generator.TIP_TOPICS)] if post_type == "tip" else None
+        # 가장 오래 안 쓴 (상품 × 사용시간) 조합·팁 주제를 고른다 (같은 숫자의 글이 되풀이되면 검수 R9 에 막힌다)
+        subject = generator.pick_subject(products, post_type, tomorrow, used, offset=i)
+        picked, topic = subject["picked"], subject["tip_topic"]
+        if post_type == "tip":
+            # tip 은 예시 계산에 쓸 상품 1개를 고른다 (링크는 붙이지 않음)
+            picked = generator.pick_subject(products, "calc", tomorrow, used, offset=i)["picked"]
         rows = reviewer_mod.product_rows(picked) if post_type != "tip" else []
-        check = reviewer_mod.make_check(rev, rows, recent_texts)
+        newest_first = [p["text"] for p in reversed(used)]
+        check = reviewer_mod.make_check(rev, rows, newest_first[:reviewer_mod.RECENT_POSTS_LIMIT])
+        same_type = [p["text"] for p in reversed(used) if p["type"] == post_type]
         post = generator.generate_post(post_type, picked, tariff, cfg, complete, variant=variant, tip_topic=topic,
-                                       checks=[check], history=history + made, now=now)
+                                       checks=[check], history=history + made, now=now,
+                                       hours=subject["hours"], recent_texts=same_type)
+        if post["status"] == "approved":
+            used.append(post)
 
         if post["status"] == "approved":
             # 다음 날 슬롯만 본다 (20:00 에 돌아도 오늘 21:30 슬롯에 넣지 않는다)

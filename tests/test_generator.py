@@ -350,3 +350,57 @@ def test_tip_topics_are_varied_and_safe(cfg):
         today = {topics[(ordinal + i) % len(topics)] for i in range(2)}
         tomorrow = {topics[(ordinal + 1 + i) % len(topics)] for i in range(2)}
         assert len(today) == 2 and len(tomorrow) == 2
+
+
+# ── 2026-10-09 주제 돌려 쓰기: 같은 숫자의 글이 되풀이되어 R9 로 자동 정지된 문제 ──────────
+
+def test_hour_options():
+    assert generator.hour_options(4) == [4, 2, 6]
+    assert generator.hour_options(8) == [8, 4, 12]
+    assert generator.hour_options(1) == [1, 2]            # 절반은 1시간 아래로 내려가지 않는다
+    assert generator.hour_options(20) == [20, 10, 24]     # 24시간을 넘지 않는다
+
+
+def _used(post_type, picked, tariff, hours=None, topic=None):
+    return {"type": post_type, "product_ids": [p.product_id for p in picked] if post_type != "tip" else [],
+            "calc_payload": generator.build_payload(post_type, picked, tariff, topic, hours=hours)}
+
+
+def test_pick_subject_never_repeats_until_all_used(tariff, products):
+    day, used, keys = date(2026, 10, 10), [], []
+    total = len(generator.subjects(products, "calc"))
+    for i in range(total):
+        s = generator.pick_subject(products, "calc", day + timedelta(days=i), used)
+        keys.append(s["key"])
+        used.append(_used("calc", s["picked"], tariff, hours=s["hours"]))
+        assert generator.subject_key(used[-1]) == s["key"]
+    assert len(set(keys)) == total                         # 모든 (상품, 사용시간) 조합을 한 번씩
+    # 연달아 같은 상품이 나오지 않는다 (상품이 2개 이상일 때)
+    assert all(a.split("|")[1] != b.split("|")[1] for a, b in zip(keys, keys[1:]))
+    # 다 쓴 뒤에는 가장 오래전에 쓴 조합으로 돌아간다
+    assert generator.pick_subject(products, "calc", day, used)["key"] == keys[0]
+
+
+def test_pick_subject_changes_numbers_for_same_product(tariff, products):
+    heater = next(p for p in products if p.category == "heater")
+    a = generator.build_payload("calc", [heater], tariff, hours=2)
+    b = generator.build_payload("calc", [heater], tariff, hours=6)
+    assert a["hours_per_day"] == 2 and b["hours_per_day"] == 6
+    assert a["est_added_cost_won"] < b["est_added_cost_won"]
+
+
+def test_pick_subject_tip_topics_rotate(tariff, products):
+    used, topics = [], []
+    for i in range(len(generator.TIP_TOPICS)):
+        s = generator.pick_subject(products, "tip", date(2026, 10, 10), used, offset=i)
+        topics.append(s["tip_topic"])
+        used.append(_used("tip", [products[0]], tariff, topic=s["tip_topic"]))
+    assert sorted(topics) == sorted(generator.TIP_TOPICS)
+
+
+def test_user_message_shows_recent_posts_to_avoid(cfg, tariff, products):
+    payload = generator.build_payload("calc", [products[0]], tariff)
+    msg = generator.user_message("calc", payload, recent_texts=[f"글{i}" for i in range(9)])
+    assert "최근에 올린 글" in msg and "겹치지 않게" in msg
+    assert msg.count("[최근 글 ") == generator.RECENT_TEXTS_FOR_GENERATOR
+    assert "최근에 올린 글" not in generator.user_message("calc", payload)
