@@ -21,6 +21,7 @@ AI 검수자 (PLAN v2 Step 4-B). 로옥션 column_guard.py 의 llm_factcheck(문
 """
 from __future__ import annotations
 
+import difflib
 import hashlib
 import json
 import logging
@@ -183,9 +184,45 @@ class ReviewResult:
 
 
 CODE_CHECKED = {"R1": "G2", "R8": "G6"}     # 문자열이 똑같은지 보는 항목은 코드 가드 결과로 판정한다
+REPEAT_SIMILARITY = 0.7     # R9: 최근 글과 글자 유사도가 이 값 이상이면 반복 (2026-10-09 까지 발행 글끼리 최대 0.46)
 
 
-def apply_code_checks(post: dict, data: dict, cfg: Config) -> dict:
+def _without_disclosure(text: str, cfg: Config) -> str:
+    """모든 링크 글에 똑같이 붙는 대가성 문구는 유사도 계산에서 뺀다."""
+    return "\n".join(line for line in (text or "").splitlines() if line.strip() != cfg.disclosure_text).strip()
+
+
+def _squash(text: str) -> str:
+    return re.sub(r"\s+", "", text or "")
+
+
+def repetition_check(post: dict, recent_posts: Sequence[str], cfg: Config) -> dict:
+    """R9 를 코드로 판정한다. 전기요금 계산 한 주제만 다루는 계정이라 LLM 은 숫자가 다른 글도 '구조가 비슷해 애매하다'며
+    전부 uncertain 으로 막았다 (2026-10-04 자동 정지, 10-09 시험 생성 4/4 보류). 반복은 다음 둘 중 하나다:
+      - 훅(링크 글 둘째 줄, tip 첫 줄)이 최근 글의 훅과 같음 → 훅만 바꾸면 풀린다 (hook_only)
+      - 대가성 문구를 뺀 본문이 최근 글과 REPEAT_SIMILARITY 이상 비슷함
+    같은 숫자의 글이 되풀이되지 않게 하는 일은 pipeline 의 주제 돌려 쓰기(generator.pick_subject)가 맡는다."""
+    import guard
+
+    text = _without_disclosure(post.get("text"), cfg)
+    hook = _squash(guard.hook_line(post))
+    worst, same_hook = 0.0, False
+    for recent in recent_posts:
+        other = _without_disclosure(recent, cfg)
+        if not other:
+            continue
+        worst = max(worst, difflib.SequenceMatcher(None, text, other).ratio())
+        # 최근 글의 훅은 대가성 문구를 뺀 첫 줄이다
+        same_hook = same_hook or (bool(hook) and hook == _squash(other.splitlines()[0]))
+    if worst >= REPEAT_SIMILARITY:
+        return {"verdict": "fail", "hook_only": False,
+                "reason": f"(코드 확인) 최근 글과 {worst:.0%} 비슷합니다. 첫 문장·문단 순서·결론을 다르게 씁니다."}
+    if same_hook:
+        return {"verdict": "fail", "hook_only": True, "reason": "(코드 확인) 훅이 최근 글의 훅과 같습니다."}
+    return {"verdict": "pass", "hook_only": False, "reason": f"(코드 확인) 최근 글과 최대 {worst:.0%} 비슷함"}
+
+
+def apply_code_checks(post: dict, data: dict, cfg: Config, recent_posts: Sequence[str] = ()) -> dict:
     """R1(대가성 문구 위치)·R8(가정 문구 그대로 포함)은 기계적 문자열 검사라 LLM 이 자주 틀린다
     (2026-10-02 시험: 그대로 있는 문구를 '다르다'고 막고, 빠진 문구를 통과시킴). 코드 가드(G2·G6) 결과로 덮어쓴다."""
     import guard
@@ -200,6 +237,7 @@ def apply_code_checks(post: dict, data: dict, cfg: Config) -> dict:
             not_applicable = item == "R8" and post.get("type") not in ("calc", "compare")
             data[item] = {"verdict": "pass", "hook_only": False,
                           "reason": "(코드 확인) 해당 없음" if not_applicable else "(코드 확인) 문구가 정확히 있음"}
+    data["R9"] = repetition_check(post, recent_posts, cfg)
     return data
 
 
@@ -219,7 +257,7 @@ class Reviewer:
             except Exception as e:      # 네트워크 오류도 형식 오류와 같이 재요청 1회 후 held
                 data, error = None, f"호출 실패: {e}"
             if data is not None:
-                data = apply_code_checks(post, data, self.cfg)
+                data = apply_code_checks(post, data, self.cfg, recent_posts)
                 verdicts = {item["verdict"] for item in data.values()}
                 status = "uncertain" if "uncertain" in verdicts else "fail" if "fail" in verdicts else "approved"
                 return ReviewResult(status, data, self.cfg.reviewer_model, n, errors)

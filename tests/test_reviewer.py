@@ -325,3 +325,49 @@ def test_make_call_picks_provider_and_needs_key(cfg):
         reviewer.make_call("gpt-4.1", Secrets())
     assert callable(reviewer.make_call("gpt-4.1", Secrets(openai_api_key="k")))
     assert callable(reviewer.make_call("claude-sonnet-5", Secrets(anthropic_api_key="k")))
+
+
+# ── 2026-10-09: R9(반복)도 코드가 판정한다 ───────────────────────────────────
+
+def _calc_post(cfg, tariff, products, hook=CALC_HOOK, body=CALC_BODY):
+    import generator
+
+    return {"type": "calc", "has_link": True, "link_url": products[0].link, "variant": "link_in_body",
+            "text": f"{cfg.disclosure_text}\n{hook}\n\n{body}",
+            "calc_payload": generator.build_payload("calc", [products[0]], tariff)}
+
+
+def test_r9_llm_opinion_is_ignored(cfg, tariff, products):
+    # LLM 이 "비슷해 애매함"이라고 해도, 최근 글과 다르면 코드가 pass 로 둔다 (2026-10-04 자동 정지 원인)
+    post = _calc_post(cfg, tariff, products)
+    recent = [f"{cfg.disclosure_text}\n가습기 저녁마다 켜면 한 달 얼마일까요?\n\n전혀 다른 내용의 글입니다. 거실에서 켜 두는 경우입니다."]
+    result = reviewer.Reviewer(cfg, FakeClaude(verdicts(R9=("uncertain", False)))).review(post, recent_posts=recent)
+    assert result.status == "approved"
+    assert result.items["R9"]["reason"].startswith("(코드 확인)")
+
+
+def test_r9_near_duplicate_is_blocked_even_if_llm_passes(cfg, tariff, products):
+    post = _calc_post(cfg, tariff, products)
+    almost = post["text"].replace("낫습니다", "좋습니다")
+    result = reviewer.Reviewer(cfg, FakeClaude(verdicts())).review(post, recent_posts=["다른 글", almost])
+    assert result.status == "fail"
+    assert result.items["R9"]["verdict"] == "fail" and result.items["R9"]["hook_only"] is False
+    assert not result.hook_fixable
+
+
+def test_r9_same_hook_is_hook_only(cfg, tariff, products):
+    post = _calc_post(cfg, tariff, products)
+    recent = [f"{cfg.disclosure_text}\n{CALC_HOOK}\n\n본문은 완전히 다른 이야기입니다. 욕실에서 잠깐 켜는 경우를 가정했습니다."]
+    result = reviewer.Reviewer(cfg, FakeClaude(verdicts())).review(post, recent_posts=recent)
+    assert result.items["R9"] == {"verdict": "fail", "hook_only": True, "reason": "(코드 확인) 훅이 최근 글의 훅과 같습니다."}
+    assert result.hook_fixable                      # 생성기가 다른 훅 후보로 바꿔 본다
+
+
+def test_r9_shared_disclosure_does_not_count_as_similarity(cfg):
+    a = {"type": "calc", "text": f"{cfg.disclosure_text}\n가\n\n나"}
+    r = reviewer.repetition_check(a, [f"{cfg.disclosure_text}\n다\n\n라"], cfg)
+    assert r["verdict"] == "pass" and "0%" in r["reason"]
+
+
+def test_reviewer_prompt_tells_llm_r9_is_code_checked(cfg):
+    assert "R9 최근 글과의 반복 여부는 코드가" in reviewer.system_prompt(cfg)

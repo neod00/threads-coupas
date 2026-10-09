@@ -26,8 +26,10 @@ def smart_llm(system, user, temperature):
     """계산 데이터(JSON)를 읽어 그 값으로 가드를 통과하는 초안을 만든다."""
     payload = json.loads(user.split("계산 데이터(JSON):\n", 1)[1].split("\n\n이전 초안", 1)[0].split("\n\n최근에 올린 글", 1)[0])
     if "tip_topic" in payload:
-        hooks = ["겨울 전기요금은 왜 오를까요?", "누진 구간이 요금을 올립니다", "사용량과 단가, 무엇이 더 클까요?"]
-        body = "누진 구간은 사용량이 늘수록 단가가 올라갑니다.\n\n지난달 고지서의 사용량부터 확인해 보세요."
+        # 주제마다 다른 글을 쓴다 (같은 글이면 코드 R9 반복 판정에 걸린다)
+        topic = payload["tip_topic"]
+        hooks = [topic[:24] + "?", topic[:24], topic[:22] + " 비교"]
+        body = f"{topic}.\n\n{topic}을 오늘 확인해 보세요."
     elif "a" in payload:
         a, b = payload["a"], payload["b"]
         hooks = [f"두 제품 한 달 {a['monthly_kwh']}kWh 차이는?", f"한 달 {a['monthly_kwh']}kWh와 {b['monthly_kwh']}kWh",
