@@ -54,7 +54,8 @@ def discard(store, post_id: str, by: str) -> dict:
 
 
 def _hook_index(post: dict) -> int:
-    return 1 if post["type"] in guard.LINK_POST_TYPES else 0
+    lines = (post.get("text") or "").split("\n")
+    return 1 if lines and lines[0].lstrip().startswith("[광고]") else 0     # 예전 형식만 첫 줄이 대가성 문구
 
 
 def swap_hook(store, cfg: Config, post_id: str, style: str) -> tuple[dict, list[str]]:

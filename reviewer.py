@@ -61,7 +61,7 @@ def request_params(model: str) -> dict:
                                       "json_schema": {"name": "review", "strict": True, "schema": OUTPUT_SCHEMA}}}
         if model.startswith(OPENAI_REASONING_PREFIXES):
             # 추론 모델은 temperature 를 받지 않는다. 짧게 생각하고 판정한다 (gpt-4.1 은 시험에서 P10 기간 오류를 놓쳤다).
-            params.update(max_completion_tokens=MAX_TOKENS, reasoning_effort="low")
+            params.update(max_completion_tokens=MAX_TOKENS, reasoning_effort="medium")
         else:
             params.update(max_completion_tokens=4000, temperature=0)
         return params

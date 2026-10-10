@@ -25,8 +25,8 @@ CASES = DATA["cases"]
 
 def test_case_counts():
     expects = Counter(c["expect"] for c in CASES)
-    assert expects == {"block": 20, "pass": 10}
-    assert len({c["id"] for c in CASES}) == 30
+    assert expects == {"block": 22, "pass": 12}
+    assert len({c["id"] for c in CASES}) == 34
 
 
 def test_problem_cases_cover_required_items():
@@ -77,7 +77,7 @@ def ideal_reviewer(cfg, overrides=None):
 def test_perfect_reviewer_passes(cfg):
     summary = exam.run_exam(ideal_reviewer(cfg), cfg, DATA)
     assert summary["passed"] is True
-    assert (summary["problem_blocked"], summary["normal_passed"]) == ("20/20", "10/10")
+    assert (summary["problem_blocked"], summary["normal_passed"]) == ("22/22", "12/12")
 
 
 def test_one_missed_problem_fails_the_exam(cfg):
@@ -118,7 +118,7 @@ def test_exam_stops_early_when_api_calls_keep_failing(cfg):
 def test_two_rejected_normals_still_pass_but_three_fail(cfg):
     assert exam.run_exam(ideal_reviewer(cfg, {"N01": "fail", "N02": "fail"}), cfg, DATA)["passed"] is True
     summary = exam.run_exam(ideal_reviewer(cfg, {"N01": "fail", "N02": "fail", "N03": "fail"}), cfg, DATA)
-    assert summary["passed"] is False and summary["normal_passed"] == "7/10"
+    assert summary["passed"] is False and summary["normal_passed"] == "9/12"
 
 
 # ── 8장: 모델·프롬프트·케이스 변경 → 불합격 전환 ─────────────────────────────────

@@ -18,7 +18,8 @@ from settings import PROJECT_ROOT, ConfigError
 
 PRODUCTS_PATH = PROJECT_ROOT / "data" / "products.csv"
 COLUMNS = ("product_id", "name", "category", "power_w", "default_hours", "link", "note")
-CATEGORIES = ("heater", "fan_heater", "mat", "blanket", "humidifier", "dehumidifier", "dryer", "other")
+CATEGORIES = ("heater", "fan_heater", "mat", "blanket", "humidifier", "dehumidifier", "dryer", "other",
+              "pet", "light", "living", "kitchen")     # 뒤 네 개는 소개(pick) 글용 (2026-10-10)
 LINK_HOSTS = ("link.coupang.com", "coupa.ng")     # 파트너스 간편링크 도메인
 MAX_NOTE_CHARS = 120
 # 후기·상품 설명을 옮겨 온 흔적, 사용 경험 표현 (규칙 2)
@@ -32,10 +33,14 @@ class Product:
     product_id: str
     name: str
     category: str
-    power_w: float
-    default_hours: float
+    power_w: float | None        # None 이면 전기요금 계산을 하지 않는 소개(pick) 글 전용 상품
+    default_hours: float | None
     link: str
     note: str
+
+    @property
+    def has_power(self) -> bool:
+        return self.power_w is not None
 
 
 def _number(value: str, name: str, row: int, hi: float | None = None) -> float:
@@ -73,12 +78,15 @@ def parse_products(rows: list[dict]) -> list[Product]:
             raise ConfigError(f"products.csv {i}행 note 에 후기 인용·사용 경험 표현이 있습니다 (규칙 2): {note}")
         if SAFETY_CLAIM_PATTERN.search(note):
             raise ConfigError(f"products.csv {i}행 note 에 안전·건강 주장이 있습니다: {note}")
+        # 소비전력·사용시간은 둘 다 채우거나 둘 다 비운다 (비우면 소개 글 전용)
+        if bool(get("power_w")) != bool(get("default_hours")):
+            raise ConfigError(f"products.csv {i}행 power_w 와 default_hours 는 둘 다 채우거나 둘 다 비워야 합니다.")
         products.append(Product(
             product_id=pid,
             name=get("name"),
             category=get("category"),
-            power_w=_number(get("power_w"), "power_w", i, hi=10_000),
-            default_hours=_number(get("default_hours"), "default_hours", i, hi=24),
+            power_w=_number(get("power_w"), "power_w", i, hi=10_000) if get("power_w") else None,
+            default_hours=_number(get("default_hours"), "default_hours", i, hi=24) if get("default_hours") else None,
             link=get("link"),
             note=note,
         ))

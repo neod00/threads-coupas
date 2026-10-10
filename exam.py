@@ -30,7 +30,7 @@ log = logging.getLogger("threads_coupas")
 
 CASES_PATH = PROJECT_ROOT / "tests" / "review_cases" / "cases.json"
 STATE_PATH = PROJECT_ROOT / "state" / "reviewer_exam.json"
-NORMAL_MIN_PASSED = 8               # 문제 글은 전부 막아야 하고, 정상 글은 이 개수 이상 통과해야 한다
+NORMAL_MIN_RATIO = 0.8              # 문제 글은 전부 막아야 하고, 정상 글은 이 비율 이상 통과해야 한다 (10개 중 8개 기준 그대로)
 ABORT_AFTER_CALL_FAILURES = 3       # 호출 자체가 연속으로 실패하면 시험을 중단한다 (크레딧 부족·인증 오류)
 
 
@@ -51,6 +51,7 @@ def build_case(case: dict, data: dict, cfg: Config) -> tuple[dict, list[dict], l
     picked = [by_id[pid] for pid in case["product_ids"]]
     post_type = case["type"]
     payload = generator.build_payload(post_type, picked, tariff, case.get("tip_topic"))
+    # 새 형식(link_in_reply)의 케이스는 omit_disclosure 로 본문에 대가성 문구를 두지 않는다
 
     head = f"{case['hook']}\n\n{case['body']}"
     if post_type == "tip":
@@ -93,7 +94,7 @@ def run_exam(rev: reviewer_mod.Reviewer, cfg: Config, data: dict | None = None) 
     passed_normals = sum(r["ok"] for r in normals)
     completed = len(results) == len(data["cases"])
     return {
-        "passed": completed and blocked == len(problems) and passed_normals >= NORMAL_MIN_PASSED,
+        "passed": completed and blocked == len(problems) and passed_normals >= NORMAL_MIN_RATIO * len(normals),
         "completed": completed,
         "problem_blocked": f"{blocked}/{len(problems)}",
         "normal_passed": f"{passed_normals}/{len(normals)}",

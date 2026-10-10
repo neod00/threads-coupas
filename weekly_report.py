@@ -146,7 +146,7 @@ def build_report(store, cfg: Config, now: datetime) -> tuple[str, dict]:
     lines = [f"# 주간 리포트 {week_start} ~ {today}", "",
              f"**판정:** {verdict(cfg, start, today, published_all, metrics_all, coupang_all)}", ""]
 
-    lines += ["## 유형별", *_group_table(week_published, week_metrics, "type", ["calc", "compare", "tip"]), ""]
+    lines += ["## 유형별", *_group_table(week_published, week_metrics, "type", ["calc", "compare", "pick", "tip"]), ""]
     lines += ["## 훅 유형별", *_group_table(week_published, week_metrics, "hook_style", ["question", "result", "compare"]), ""]
     lines += ["## 링크 위치(variant)별",
               *_group_table([p for p in week_published if p.get("variant")], week_metrics, "variant",

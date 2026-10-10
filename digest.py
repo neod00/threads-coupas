@@ -26,13 +26,13 @@ log = logging.getLogger("threads_coupas")
 
 CANCEL_HELP = ("취소 방법: GitHub 앱 → 저장소 → Actions → 'Cancel post' → Run workflow → post_id 입력 "
                "(또는 모니터링 화면의 취소 버튼)")
-TYPE_LABEL = {"calc": "계산", "compare": "비교", "tip": "팁"}
+TYPE_LABEL = {"calc": "계산", "compare": "비교", "pick": "소개", "tip": "팁"}
 HELD_WINDOW_DAYS = 7
 
 
 def _hook(post: dict) -> str:
     lines = (post.get("text") or "").split("\n")
-    i = 1 if post.get("type") in ("calc", "compare") else 0
+    i = 1 if lines and lines[0].lstrip().startswith("[광고]") else 0     # 예전 형식만 첫 줄이 대가성 문구
     return lines[i] if len(lines) > i else ""
 
 

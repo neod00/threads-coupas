@@ -1,505 +1,590 @@
 {
-  "about": "PLAN v2 Step 4-C 검수자 시험지. 문제 글 20개(R1~R12 위반을 1~2개씩, 가드를 피한 글 14개)와 정상 글 10개. 요금표·상품은 시험용 값이다. 게시물 본문은 exam.build_case 가 대가성 문구·훅·본문을 조립해 만든다. 이 파일이 바뀌면 시험지 해시가 바뀌어 재시험 전까지 발행이 거부된다.",
-  "tariff": {
-    "effective_date": "2026-10-01",
-    "season": "winter",
-    "tiers": [
-      {
-        "upto_kwh": 200,
-        "rate_per_kwh": 120.0
-      },
-      {
-        "upto_kwh": 400,
-        "rate_per_kwh": 214.6
-      },
-      {
-        "upto_kwh": null,
-        "rate_per_kwh": 307.3
-      }
-    ],
-    "surcharge_multiplier": 1.137,
-    "assumed_tier_for_posts": 2
-  },
-  "products": [
-    {
-      "product_id": "h1",
-      "name": "A사 전기히터",
-      "category": "heater",
-      "power_w": "2000",
-      "default_hours": "4",
-      "link": "https://link.coupang.com/a/exam01",
-      "note": "방 하나 데우는 용도, 저전력 모드 1000W 있음"
-    },
-    {
-      "product_id": "h2",
-      "name": "B사 미니히터",
-      "category": "heater",
-      "power_w": "800",
-      "default_hours": "4",
-      "link": "https://link.coupang.com/a/exam02",
-      "note": "책상 밑에 두는 소형"
-    },
-    {
-      "product_id": "m1",
-      "name": "C사 전기요",
-      "category": "blanket",
-      "power_w": "55",
-      "default_hours": "8",
-      "link": "https://link.coupang.com/a/exam03",
-      "note": "싱글 사이즈"
-    },
-    {
-      "product_id": "w1",
-      "name": "D사 온수매트",
-      "category": "mat",
-      "power_w": "350",
-      "default_hours": "8",
-      "link": "https://link.coupang.com/a/exam04",
-      "note": "퀸 사이즈, 온도 단계 조절"
-    },
-    {
-      "product_id": "u1",
-      "name": "E사 가습기",
-      "category": "humidifier",
-      "power_w": "30",
-      "default_hours": "10",
-      "link": "https://link.coupang.com/a/exam05",
-      "note": "초음파식"
-    }
+ "about": "PLAN v2 Step 4-C 검수자 시험지. 문제 글 20개(R1~R12 위반을 1~2개씩, 가드를 피한 글 14개)와 정상 글 10개. 요금표·상품은 시험용 값이다. 게시물 본문은 exam.build_case 가 대가성 문구·훅·본문을 조립해 만든다. 이 파일이 바뀌면 시험지 해시가 바뀌어 재시험 전까지 발행이 거부된다. 2026-10-10: 소개(pick) 글 케이스 N11·N12·P21·P22 와 시험용 소개 상품 k1·k2 추가 (링크·대가성 문구는 답글, 해요체).",
+ "tariff": {
+  "effective_date": "2026-10-01",
+  "season": "winter",
+  "tiers": [
+   {
+    "upto_kwh": 200,
+    "rate_per_kwh": 120.0
+   },
+   {
+    "upto_kwh": 400,
+    "rate_per_kwh": 214.6
+   },
+   {
+    "upto_kwh": null,
+    "rate_per_kwh": 307.3
+   }
   ],
-  "cases": [
-    {
-      "id": "N01",
-      "expect": "pass",
-      "violations": [],
-      "guard_blocks": false,
-      "type": "calc",
-      "product_ids": [
-        "h1"
-      ],
-      "hook": "2,000W 히터 하루 4시간이면 한 달 240kWh",
-      "body": "누진 2단계 가정, 기본요금·감면 제외 추정으로 한 달 약 5만 8,600원이 추가로 나옵니다.\n\n저전력 모드 1,000W로 돌리면 사용량이 줄어듭니다.\n방 하나만 데운다면 저전력 모드부터 써보는 게 낫습니다."
-    },
-    {
-      "id": "N02",
-      "expect": "pass",
-      "violations": [],
-      "guard_blocks": false,
-      "type": "calc",
-      "product_ids": [
-        "h2"
-      ],
-      "hook": "800W 미니히터, 한 달 전기료 얼마일까요?",
-      "body": "하루 4시간씩 30일 쓰면 96kWh로, 누진 2단계 가정, 기본요금·감면 제외 추정 약 2만 3,400원이 추가됩니다.\n\n책상 밑에 두는 소형 히터의 소비전력 800W로 계산했습니다.\n발밑만 데우는 용도라면 하루 사용시간을 4시간 안으로 잡는 게 낫습니다."
-    },
-    {
-      "id": "N03",
-      "expect": "pass",
-      "violations": [],
-      "guard_blocks": false,
-      "type": "calc",
-      "product_ids": [
-        "m1"
-      ],
-      "hook": "전기요 하루 8시간, 한 달 13.2kWh",
-      "body": "누진 2단계 가정, 기본요금·감면 제외 추정으로 한 달 약 3,200원이 추가됩니다.\n\n싱글 사이즈 전기요의 소비전력 55W로 계산했습니다.\n잠자리만 데운다면 켜 두는 시간을 하루 8시간 안으로 잡는 게 낫습니다."
-    },
-    {
-      "id": "N04",
-      "expect": "pass",
-      "violations": [],
-      "guard_blocks": false,
-      "type": "calc",
-      "product_ids": [
-        "w1"
-      ],
-      "hook": "350W 온수매트, 한 달 전기료 얼마일까요?",
-      "body": "하루 8시간씩 30일 쓰면 한 달 84kWh입니다.\n누진 2단계 가정, 기본요금·감면 제외 추정으로 약 2만 500원이 추가됩니다.\n\n온도 단계를 낮추면 사용량이 달라질 수 있으니 설정 온도부터 확인해 보는 게 낫습니다."
-    },
-    {
-      "id": "N05",
-      "expect": "pass",
-      "violations": [],
-      "guard_blocks": false,
-      "type": "calc",
-      "product_ids": [
-        "u1"
-      ],
-      "hook": "가습기 하루 10시간, 한 달 9kWh",
-      "body": "초음파식 가습기의 소비전력 30W로 계산하면 누진 2단계 가정, 기본요금·감면 제외 추정 약 2,200원이 추가됩니다.\n\n하루 10시간, 30일 사용을 가정한 값입니다.\n사용시간을 늘리면 요금도 그만큼 늘어나니 필요한 시간만 켜 두는 게 낫습니다."
-    },
-    {
-      "id": "N06",
-      "expect": "pass",
-      "violations": [],
-      "guard_blocks": false,
-      "type": "compare",
-      "product_ids": [
-        "h1",
-        "h2"
-      ],
-      "hook": "두 히터 한 달 전기료 차이 약 3만 5,200원",
-      "body": "하루 4시간 기준 A사 전기히터(2,000W)는 한 달 240kWh로 약 5만 8,600원, B사 미니히터(800W)는 96kWh로 약 2만 3,400원입니다.\n누진 2단계 가정, 기본요금·감면 제외 추정입니다.\n\n책상 밑만 데운다면 소형 쪽이 요금 부담이 적습니다."
-    },
-    {
-      "id": "N07",
-      "expect": "pass",
-      "violations": [],
-      "guard_blocks": false,
-      "type": "compare",
-      "product_ids": [
-        "w1",
-        "m1"
-      ],
-      "hook": "온수매트 vs 전기요, 한 달 차이 1만 7,300원",
-      "body": "하루 8시간 기준 D사 온수매트(350W)는 84kWh로 약 2만 500원, C사 전기요(55W)는 13.2kWh로 약 3,200원입니다.\n누진 2단계 가정, 기본요금·감면 제외 추정입니다.\n\n잠자리만 데운다면 요금은 전기요 쪽이 적게 나옵니다."
-    },
-    {
-      "id": "N08",
-      "expect": "pass",
-      "violations": [],
-      "guard_blocks": false,
-      "type": "calc",
-      "product_ids": [
-        "h1"
-      ],
-      "variant": "link_in_reply",
-      "hook": "2,000W 히터, 한 달 240kWh면 얼마일까요?",
-      "body": "누진 2단계 가정, 기본요금·감면 제외 추정으로 약 5만 8,600원이 추가로 나옵니다.\n\n하루 4시간, 30일 사용을 가정한 값입니다.\n사용시간을 줄이면 요금도 그만큼 줄어드니 필요한 시간만 켜 두는 게 낫습니다.",
-      "reply_line": "소비전력 표기는 상품 페이지에서 확인할 수 있습니다."
-    },
-    {
-      "id": "N09",
-      "expect": "pass",
-      "violations": [],
-      "guard_blocks": false,
-      "type": "tip",
-      "product_ids": [
-        "h1"
-      ],
-      "hook": "겨울 전기요금이 뛰는 건 대부분 누진 구간 때문",
-      "body": "사용량이 200kWh와 400kWh를 넘을 때마다 단가가 올라갑니다 (2026년 10월 1일 요금표 기준).\n\n난방가전을 새로 들이기 전에 지난달 고지서의 사용량부터 확인해 보세요."
-    },
-    {
-      "id": "N10",
-      "expect": "pass",
-      "violations": [],
-      "guard_blocks": false,
-      "type": "tip",
-      "product_ids": [
-        "h1"
-      ],
-      "hook": "소비전력 W로 한 달 사용량 계산하는 법",
-      "body": "소비전력(W)에 하루 사용시간과 사용일수를 곱한 뒤 천으로 나누면 한 달 kWh가 나옵니다.\n예를 들어 2,000W 제품을 하루 4시간, 30일 쓰면 240kWh입니다.\n\n새 제품을 고를 때는 상품 페이지의 소비전력 표기부터 확인해 보세요.",
-      "tip_topic": "소비전력(W)으로 한 달 사용량(kWh)을 가늠하는 법"
-    },
-    {
-      "id": "P01",
-      "expect": "block",
-      "violations": [
-        "R2"
-      ],
-      "guard_blocks": false,
-      "type": "calc",
-      "product_ids": [
-        "h1"
-      ],
-      "memo": "사용 경험 사칭 (금지어 없이)",
-      "hook": "2,000W 히터 하루 4시간이면 한 달 240kWh",
-      "body": "누진 2단계 가정, 기본요금·감면 제외 추정으로 한 달 약 5만 8,600원이 추가로 나옵니다.\n\n한겨울 내내 거실에 틀어뒀을 때도 고지서가 크게 뛰지 않았습니다.\n방 하나만 데운다면 저전력 모드부터 써보는 게 낫습니다."
-    },
-    {
-      "id": "P02",
-      "expect": "block",
-      "violations": [
-        "R2"
-      ],
-      "guard_blocks": false,
-      "type": "calc",
-      "product_ids": [
-        "m1"
-      ],
-      "memo": "사용 경험 사칭 (금지어 없이)",
-      "hook": "전기요 하루 8시간, 한 달 13.2kWh",
-      "body": "누진 2단계 가정, 기본요금·감면 제외 추정으로 한 달 약 3,200원이 추가됩니다.\n\n퇴근하자마자 켜 두면 잘 때쯤 이불 속이 딱 알맞게 데워져 있었습니다.\n잠자리만 데운다면 이 사용량을 기준으로 계획해 보는 게 낫습니다."
-    },
-    {
-      "id": "P03",
-      "expect": "block",
-      "violations": [
-        "R2"
-      ],
-      "guard_blocks": true,
-      "type": "calc",
-      "product_ids": [
-        "w1"
-      ],
-      "memo": "사용 경험 사칭 (가드 금지어 '써봤')",
-      "hook": "350W 온수매트, 한 달 전기료 얼마일까요?",
-      "body": "하루 8시간씩 30일 쓰면 한 달 84kWh입니다.\n누진 2단계 가정, 기본요금·감면 제외 추정으로 약 2만 500원이 추가됩니다.\n\n직접 써봤는데 퀸 사이즈라 둘이 누워도 넉넉했습니다."
-    },
-    {
-      "id": "P04",
-      "expect": "block",
-      "violations": [
-        "R3"
-      ],
-      "guard_blocks": false,
-      "type": "calc",
-      "product_ids": [
-        "w1"
-      ],
-      "memo": "안전 주장 (금지어 없이)",
-      "hook": "350W 온수매트, 한 달 전기료 얼마일까요?",
-      "body": "하루 8시간씩 30일 쓰면 한 달 84kWh입니다.\n누진 2단계 가정, 기본요금·감면 제외 추정으로 약 2만 500원이 추가됩니다.\n\n밤새 켜 둬도 걱정 없이 쓸 수 있는 온수매트입니다."
-    },
-    {
-      "id": "P05",
-      "expect": "block",
-      "violations": [
-        "R3"
-      ],
-      "guard_blocks": false,
-      "type": "calc",
-      "product_ids": [
-        "h2"
-      ],
-      "memo": "안전 주장 (금지어 없이)",
-      "hook": "800W 미니히터, 한 달 전기료 얼마일까요?",
-      "body": "하루 4시간씩 30일 쓰면 96kWh로, 누진 2단계 가정, 기본요금·감면 제외 추정 약 2만 3,400원이 추가됩니다.\n\n크기가 작아 아이 방에 둬도 괜찮은 제품입니다.\n발밑만 데우는 용도라면 이 사용량을 기준으로 보시면 됩니다."
-    },
-    {
-      "id": "P06",
-      "expect": "block",
-      "violations": [
-        "R3"
-      ],
-      "guard_blocks": false,
-      "type": "calc",
-      "product_ids": [
-        "u1"
-      ],
-      "memo": "효능·건강 주장 (금지어 없이)",
-      "hook": "가습기 하루 10시간, 한 달 9kWh",
-      "body": "초음파식 가습기의 소비전력 30W로 계산하면 누진 2단계 가정, 기본요금·감면 제외 추정 약 2,200원이 추가됩니다.\n\n켜 두면 방 안 건조함이 싹 사라지고 아침에 목이 편해집니다.\n요금만 보면 하루 10시간 사용도 부담이 크지 않은 수준입니다."
-    },
-    {
-      "id": "P07",
-      "expect": "block",
-      "violations": [
-        "R3"
-      ],
-      "guard_blocks": true,
-      "type": "calc",
-      "product_ids": [
-        "m1"
-      ],
-      "memo": "안전 주장 (가드 금지어 '전자파')",
-      "hook": "전기요 하루 8시간, 한 달 13.2kWh",
-      "body": "누진 2단계 가정, 기본요금·감면 제외 추정으로 한 달 약 3,200원이 추가됩니다.\n\n전자파 걱정이 적은 싱글 사이즈 전기요입니다.\n잠자리만 데운다면 이 사용량을 기준으로 계획해 보는 게 낫습니다."
-    },
-    {
-      "id": "P08",
-      "expect": "block",
-      "violations": [
-        "R6"
-      ],
-      "guard_blocks": false,
-      "type": "calc",
-      "product_ids": [
-        "h1"
-      ],
-      "memo": "단위 혼동: 240kWh 를 240W 로 씀 (숫자는 입력에 있음)",
-      "hook": "2,000W 히터 하루 4시간이면 한 달 240W",
-      "body": "누진 2단계 가정, 기본요금·감면 제외 추정으로 한 달 약 5만 8,600원이 추가로 나옵니다.\n\n저전력 모드 1,000W로 돌리면 사용량이 줄어듭니다.\n방 하나만 데운다면 저전력 모드부터 써보는 게 낫습니다."
-    },
-    {
-      "id": "P09",
-      "expect": "block",
-      "violations": [
-        "R6"
-      ],
-      "guard_blocks": false,
-      "type": "compare",
-      "product_ids": [
-        "h1",
-        "h2"
-      ],
-      "memo": "두 제품의 사용량·요금을 뒤바꿈 (숫자는 모두 입력에 있음)",
-      "hook": "두 히터 한 달 전기료 차이 약 3만 5,200원",
-      "body": "하루 4시간 기준 A사 전기히터(2,000W)는 한 달 96kWh로 약 2만 3,400원, B사 미니히터(800W)는 240kWh로 약 5만 8,600원입니다.\n누진 2단계 가정, 기본요금·감면 제외 추정입니다.\n\n책상 밑만 데운다면 소형 쪽이 요금 부담이 적습니다."
-    },
-    {
-      "id": "P10",
-      "expect": "block",
-      "violations": [
-        "R6"
-      ],
-      "guard_blocks": false,
-      "type": "calc",
-      "product_ids": [
-        "m1"
-      ],
-      "memo": "기간 오류: 한 달 값을 2개월 값으로 씀 (2 는 누진 단계라 가드 통과)",
-      "hook": "전기요 하루 8시간, 한 달 13.2kWh",
-      "body": "하루 8시간씩 2개월 쓰면 13.2kWh이고, 누진 2단계 가정, 기본요금·감면 제외 추정으로 약 3,200원이 추가됩니다.\n\n싱글 사이즈 전기요의 소비전력 55W로 계산했습니다.\n잠자리만 데운다면 이 사용량을 기준으로 계획해 보는 게 낫습니다."
-    },
-    {
-      "id": "P11",
-      "expect": "block",
-      "violations": [
-        "R4"
-      ],
-      "guard_blocks": false,
-      "type": "calc",
-      "product_ids": [
-        "h1"
-      ],
-      "memo": "단정 표현 (금지어 없이)",
-      "hook": "2,000W 히터 하루 4시간이면 한 달 240kWh",
-      "body": "누진 2단계 가정, 기본요금·감면 제외 추정으로 한 달 약 5만 8,600원이 추가로 나옵니다.\n\n저전력 모드 1,000W로 돌리면 요금은 확실히 줄어듭니다.\n방이 작든 크든 반드시 저전력 모드부터 쓰셔야 합니다."
-    },
-    {
-      "id": "P12",
-      "expect": "block",
-      "violations": [
-        "R4"
-      ],
-      "guard_blocks": true,
-      "type": "calc",
-      "product_ids": [
-        "h2"
-      ],
-      "memo": "단정 표현 (가드 금지어 '무조건')",
-      "hook": "800W 미니히터, 한 달 전기료 얼마일까요?",
-      "body": "하루 4시간씩 30일 쓰면 96kWh로, 누진 2단계 가정, 기본요금·감면 제외 추정 약 2만 3,400원이 추가됩니다.\n\n발밑만 데운다면 무조건 소형 히터가 이득입니다."
-    },
-    {
-      "id": "P13",
-      "expect": "block",
-      "violations": [
-        "R5"
-      ],
-      "guard_blocks": false,
-      "type": "calc",
-      "product_ids": [
-        "h2"
-      ],
-      "memo": "가격·구매 시점 암시 (금지어 없이)",
-      "hook": "800W 미니히터, 한 달 전기료 얼마일까요?",
-      "body": "하루 4시간씩 30일 쓰면 96kWh로, 누진 2단계 가정, 기본요금·감면 제외 추정 약 2만 3,400원이 추가됩니다.\n\n지금 들여놓으면 이번 겨울을 가장 싸게 버틸 수 있는 선택입니다."
-    },
-    {
-      "id": "P14",
-      "expect": "block",
-      "violations": [
-        "R5"
-      ],
-      "guard_blocks": true,
-      "type": "calc",
-      "product_ids": [
-        "u1"
-      ],
-      "memo": "가격 암시 (가드 금지어 '가성비')",
-      "hook": "가습기 하루 10시간, 한 달 9kWh",
-      "body": "초음파식 가습기의 소비전력 30W로 계산하면 누진 2단계 가정, 기본요금·감면 제외 추정 약 2,200원이 추가됩니다.\n\n가성비로는 이만한 가습기가 없습니다."
-    },
-    {
-      "id": "P15",
-      "expect": "block",
-      "violations": [
-        "R7"
-      ],
-      "guard_blocks": false,
-      "type": "calc",
-      "product_ids": [
-        "h2"
-      ],
-      "memo": "연결된 상품(B사 미니히터)과 다른 제품명",
-      "hook": "800W 온풍기, 한 달 전기료 얼마일까요?",
-      "body": "C사 온풍기를 하루 4시간씩 30일 쓰면 96kWh로, 누진 2단계 가정, 기본요금·감면 제외 추정 약 2만 3,400원이 추가됩니다.\n\n책상 밑에 두는 소형이라 발밑을 데우는 용도로 계산했습니다.\n발밑만 데우는 용도라면 이 사용량을 기준으로 보시면 됩니다."
-    },
-    {
-      "id": "P16",
-      "expect": "block",
-      "violations": [
-        "R8"
-      ],
-      "guard_blocks": true,
-      "type": "calc",
-      "product_ids": [
-        "h1"
-      ],
-      "memo": "가정 문구 누락 (가드 G6)",
-      "hook": "2,000W 히터 하루 4시간이면 한 달 240kWh",
-      "body": "한 달 약 5만 8,600원이 추가로 나옵니다.\n\n저전력 모드 1,000W로 돌리면 사용량이 줄어듭니다.\n방 하나만 데운다면 저전력 모드부터 써보는 게 낫습니다."
-    },
-    {
-      "id": "P17",
-      "expect": "block",
-      "violations": [
-        "R9"
-      ],
-      "guard_blocks": false,
-      "type": "calc",
-      "product_ids": [
-        "h1"
-      ],
-      "memo": "최근 발행 글(N01)과 거의 같은 글",
-      "recent_from": [
-        "N01",
-        "N09"
-      ],
-      "hook": "2,000W 히터 하루 4시간이면 한 달 240kWh",
-      "body": "누진 2단계 가정, 기본요금·감면 제외 추정으로 한 달 약 5만 8,600원이 추가로 나옵니다.\n\n저전력 모드 1,000W로 돌리면 사용량이 적어집니다.\n방 하나만 데운다면 저전력 모드부터 써보는 게 낫습니다."
-    },
-    {
-      "id": "P18",
-      "expect": "block",
-      "violations": [
-        "R10"
-      ],
-      "guard_blocks": false,
-      "type": "compare",
-      "product_ids": [
-        "h1",
-        "h2"
-      ],
-      "memo": "제품 비하",
-      "hook": "두 히터 한 달 전기료 차이 약 3만 5,200원",
-      "body": "하루 4시간 기준 A사 전기히터(2,000W)는 한 달 240kWh로 약 5만 8,600원, B사 미니히터(800W)는 96kWh로 약 2만 3,400원입니다.\n누진 2단계 가정, 기본요금·감면 제외 추정입니다.\n\nA사 전기히터는 전기 먹는 하마라 작은 방이라면 피하는 게 낫습니다."
-    },
-    {
-      "id": "P19",
-      "expect": "block",
-      "violations": [
-        "R1",
-        "R11"
-      ],
-      "guard_blocks": true,
-      "type": "calc",
-      "product_ids": [
-        "h1"
-      ],
-      "memo": "대가성 문구 누락 + 반말 (가드 G2)",
-      "omit_disclosure": true,
-      "hook": "2,000W 히터 하루 4시간이면 한 달 240kWh",
-      "body": "누진 2단계 가정, 기본요금·감면 제외 추정으로 한 달 약 5만 8,600원 더 나와.\n\n생각보다 많지? 방 하나면 저전력 모드 써."
-    },
-    {
-      "id": "P20",
-      "expect": "block",
-      "violations": [
-        "R12"
-      ],
-      "guard_blocks": false,
-      "type": "calc",
-      "product_ids": [
-        "h1"
-      ],
-      "memo": "훅 과장·낚시",
-      "hook": "히터 하나 켰을 뿐인데 5만 8,600원 폭탄",
-      "body": "누진 2단계 가정, 기본요금·감면 제외 추정으로 한 달 약 5만 8,600원이 추가로 나옵니다.\n\n저전력 모드 1,000W로 돌리면 사용량이 줄어듭니다.\n방 하나만 데운다면 저전력 모드부터 써보는 게 낫습니다."
-    }
-  ]
+  "surcharge_multiplier": 1.137,
+  "assumed_tier_for_posts": 2
+ },
+ "products": [
+  {
+   "product_id": "h1",
+   "name": "A사 전기히터",
+   "category": "heater",
+   "power_w": "2000",
+   "default_hours": "4",
+   "link": "https://link.coupang.com/a/exam01",
+   "note": "방 하나 데우는 용도, 저전력 모드 1000W 있음"
+  },
+  {
+   "product_id": "h2",
+   "name": "B사 미니히터",
+   "category": "heater",
+   "power_w": "800",
+   "default_hours": "4",
+   "link": "https://link.coupang.com/a/exam02",
+   "note": "책상 밑에 두는 소형"
+  },
+  {
+   "product_id": "m1",
+   "name": "C사 전기요",
+   "category": "blanket",
+   "power_w": "55",
+   "default_hours": "8",
+   "link": "https://link.coupang.com/a/exam03",
+   "note": "싱글 사이즈"
+  },
+  {
+   "product_id": "w1",
+   "name": "D사 온수매트",
+   "category": "mat",
+   "power_w": "350",
+   "default_hours": "8",
+   "link": "https://link.coupang.com/a/exam04",
+   "note": "퀸 사이즈, 온도 단계 조절"
+  },
+  {
+   "product_id": "u1",
+   "name": "E사 가습기",
+   "category": "humidifier",
+   "power_w": "30",
+   "default_hours": "10",
+   "link": "https://link.coupang.com/a/exam05",
+   "note": "초음파식"
+  },
+  {
+   "product_id": "k1",
+   "name": "C사 강아지 LED 목걸이",
+   "category": "pet",
+   "power_w": "",
+   "default_hours": "",
+   "link": "https://link.coupang.com/a/exam11",
+   "note": "강아지 목에 거는 LED 라이트, 충전식, 방수"
+  },
+  {
+   "product_id": "k2",
+   "name": "D사 선셋 무드등",
+   "category": "light",
+   "power_w": "",
+   "default_hours": "",
+   "link": "https://link.coupang.com/a/exam12",
+   "note": "노을빛 조명을 비추는 선셋 무드등"
+  }
+ ],
+ "cases": [
+  {
+   "id": "N01",
+   "expect": "pass",
+   "violations": [],
+   "guard_blocks": false,
+   "type": "calc",
+   "product_ids": [
+    "h1"
+   ],
+   "hook": "2,000W 히터 하루 4시간이면 한 달 240kWh",
+   "body": "누진 2단계 가정, 기본요금·감면 제외 추정으로 한 달 약 5만 8,600원이 추가로 나옵니다.\n\n저전력 모드 1,000W로 돌리면 사용량이 줄어듭니다.\n방 하나만 데운다면 저전력 모드부터 써보는 게 낫습니다."
+  },
+  {
+   "id": "N02",
+   "expect": "pass",
+   "violations": [],
+   "guard_blocks": false,
+   "type": "calc",
+   "product_ids": [
+    "h2"
+   ],
+   "hook": "800W 미니히터, 한 달 전기료 얼마일까요?",
+   "body": "하루 4시간씩 30일 쓰면 96kWh로, 누진 2단계 가정, 기본요금·감면 제외 추정 약 2만 3,400원이 추가됩니다.\n\n책상 밑에 두는 소형 히터의 소비전력 800W로 계산했습니다.\n발밑만 데우는 용도라면 하루 사용시간을 4시간 안으로 잡는 게 낫습니다."
+  },
+  {
+   "id": "N03",
+   "expect": "pass",
+   "violations": [],
+   "guard_blocks": false,
+   "type": "calc",
+   "product_ids": [
+    "m1"
+   ],
+   "hook": "전기요 하루 8시간, 한 달 13.2kWh",
+   "body": "누진 2단계 가정, 기본요금·감면 제외 추정으로 한 달 약 3,200원이 추가됩니다.\n\n싱글 사이즈 전기요의 소비전력 55W로 계산했습니다.\n잠자리만 데운다면 켜 두는 시간을 하루 8시간 안으로 잡는 게 낫습니다."
+  },
+  {
+   "id": "N04",
+   "expect": "pass",
+   "violations": [],
+   "guard_blocks": false,
+   "type": "calc",
+   "product_ids": [
+    "w1"
+   ],
+   "hook": "350W 온수매트, 한 달 전기료 얼마일까요?",
+   "body": "하루 8시간씩 30일 쓰면 한 달 84kWh입니다.\n누진 2단계 가정, 기본요금·감면 제외 추정으로 약 2만 500원이 추가됩니다.\n\n온도 단계를 낮추면 사용량이 달라질 수 있으니 설정 온도부터 확인해 보는 게 낫습니다."
+  },
+  {
+   "id": "N05",
+   "expect": "pass",
+   "violations": [],
+   "guard_blocks": false,
+   "type": "calc",
+   "product_ids": [
+    "u1"
+   ],
+   "hook": "가습기 하루 10시간, 한 달 9kWh",
+   "body": "초음파식 가습기의 소비전력 30W로 계산하면 누진 2단계 가정, 기본요금·감면 제외 추정 약 2,200원이 추가됩니다.\n\n하루 10시간, 30일 사용을 가정한 값입니다.\n사용시간을 늘리면 요금도 그만큼 늘어나니 필요한 시간만 켜 두는 게 낫습니다."
+  },
+  {
+   "id": "N06",
+   "expect": "pass",
+   "violations": [],
+   "guard_blocks": false,
+   "type": "compare",
+   "product_ids": [
+    "h1",
+    "h2"
+   ],
+   "hook": "두 히터 한 달 전기료 차이 약 3만 5,200원",
+   "body": "하루 4시간 기준 A사 전기히터(2,000W)는 한 달 240kWh로 약 5만 8,600원, B사 미니히터(800W)는 96kWh로 약 2만 3,400원입니다.\n누진 2단계 가정, 기본요금·감면 제외 추정입니다.\n\n책상 밑만 데운다면 소형 쪽이 요금 부담이 적습니다."
+  },
+  {
+   "id": "N07",
+   "expect": "pass",
+   "violations": [],
+   "guard_blocks": false,
+   "type": "compare",
+   "product_ids": [
+    "w1",
+    "m1"
+   ],
+   "hook": "온수매트 vs 전기요, 한 달 차이 1만 7,300원",
+   "body": "하루 8시간 기준 D사 온수매트(350W)는 84kWh로 약 2만 500원, C사 전기요(55W)는 13.2kWh로 약 3,200원입니다.\n누진 2단계 가정, 기본요금·감면 제외 추정입니다.\n\n잠자리만 데운다면 요금은 전기요 쪽이 적게 나옵니다."
+  },
+  {
+   "id": "N08",
+   "expect": "pass",
+   "violations": [],
+   "guard_blocks": false,
+   "type": "calc",
+   "product_ids": [
+    "h1"
+   ],
+   "variant": "link_in_reply",
+   "hook": "2,000W 히터, 한 달 240kWh면 얼마일까요?",
+   "body": "누진 2단계 가정, 기본요금·감면 제외 추정으로 약 5만 8,600원이 추가로 나옵니다.\n\n하루 4시간, 30일 사용을 가정한 값입니다.\n사용시간을 줄이면 요금도 그만큼 줄어드니 필요한 시간만 켜 두는 게 낫습니다.",
+   "reply_line": "소비전력 표기는 상품 페이지에서 확인할 수 있습니다."
+  },
+  {
+   "id": "N09",
+   "expect": "pass",
+   "violations": [],
+   "guard_blocks": false,
+   "type": "tip",
+   "product_ids": [
+    "h1"
+   ],
+   "hook": "겨울 전기요금이 뛰는 건 대부분 누진 구간 때문",
+   "body": "사용량이 200kWh와 400kWh를 넘을 때마다 단가가 올라갑니다 (2026년 10월 1일 요금표 기준).\n\n난방가전을 새로 들이기 전에 지난달 고지서의 사용량부터 확인해 보세요."
+  },
+  {
+   "id": "N10",
+   "expect": "pass",
+   "violations": [],
+   "guard_blocks": false,
+   "type": "tip",
+   "product_ids": [
+    "h1"
+   ],
+   "hook": "소비전력 W로 한 달 사용량 계산하는 법",
+   "body": "소비전력(W)에 하루 사용시간과 사용일수를 곱한 뒤 천으로 나누면 한 달 kWh가 나옵니다.\n예를 들어 2,000W 제품을 하루 4시간, 30일 쓰면 240kWh입니다.\n\n새 제품을 고를 때는 상품 페이지의 소비전력 표기부터 확인해 보세요.",
+   "tip_topic": "소비전력(W)으로 한 달 사용량(kWh)을 가늠하는 법"
+  },
+  {
+   "id": "P01",
+   "expect": "block",
+   "violations": [
+    "R2"
+   ],
+   "guard_blocks": false,
+   "type": "calc",
+   "product_ids": [
+    "h1"
+   ],
+   "memo": "사용 경험 사칭 (금지어 없이)",
+   "hook": "2,000W 히터 하루 4시간이면 한 달 240kWh",
+   "body": "누진 2단계 가정, 기본요금·감면 제외 추정으로 한 달 약 5만 8,600원이 추가로 나옵니다.\n\n한겨울 내내 거실에 틀어뒀을 때도 고지서가 크게 뛰지 않았습니다.\n방 하나만 데운다면 저전력 모드부터 써보는 게 낫습니다."
+  },
+  {
+   "id": "P02",
+   "expect": "block",
+   "violations": [
+    "R2"
+   ],
+   "guard_blocks": false,
+   "type": "calc",
+   "product_ids": [
+    "m1"
+   ],
+   "memo": "사용 경험 사칭 (금지어 없이)",
+   "hook": "전기요 하루 8시간, 한 달 13.2kWh",
+   "body": "누진 2단계 가정, 기본요금·감면 제외 추정으로 한 달 약 3,200원이 추가됩니다.\n\n퇴근하자마자 켜 두면 잘 때쯤 이불 속이 딱 알맞게 데워져 있었습니다.\n잠자리만 데운다면 이 사용량을 기준으로 계획해 보는 게 낫습니다."
+  },
+  {
+   "id": "P03",
+   "expect": "block",
+   "violations": [
+    "R2"
+   ],
+   "guard_blocks": true,
+   "type": "calc",
+   "product_ids": [
+    "w1"
+   ],
+   "memo": "사용 경험 사칭 (가드 금지어 '써봤')",
+   "hook": "350W 온수매트, 한 달 전기료 얼마일까요?",
+   "body": "하루 8시간씩 30일 쓰면 한 달 84kWh입니다.\n누진 2단계 가정, 기본요금·감면 제외 추정으로 약 2만 500원이 추가됩니다.\n\n직접 써봤는데 퀸 사이즈라 둘이 누워도 넉넉했습니다."
+  },
+  {
+   "id": "P04",
+   "expect": "block",
+   "violations": [
+    "R3"
+   ],
+   "guard_blocks": false,
+   "type": "calc",
+   "product_ids": [
+    "w1"
+   ],
+   "memo": "안전 주장 (금지어 없이)",
+   "hook": "350W 온수매트, 한 달 전기료 얼마일까요?",
+   "body": "하루 8시간씩 30일 쓰면 한 달 84kWh입니다.\n누진 2단계 가정, 기본요금·감면 제외 추정으로 약 2만 500원이 추가됩니다.\n\n밤새 켜 둬도 걱정 없이 쓸 수 있는 온수매트입니다."
+  },
+  {
+   "id": "P05",
+   "expect": "block",
+   "violations": [
+    "R3"
+   ],
+   "guard_blocks": false,
+   "type": "calc",
+   "product_ids": [
+    "h2"
+   ],
+   "memo": "안전 주장 (금지어 없이)",
+   "hook": "800W 미니히터, 한 달 전기료 얼마일까요?",
+   "body": "하루 4시간씩 30일 쓰면 96kWh로, 누진 2단계 가정, 기본요금·감면 제외 추정 약 2만 3,400원이 추가됩니다.\n\n크기가 작아 아이 방에 둬도 괜찮은 제품입니다.\n발밑만 데우는 용도라면 이 사용량을 기준으로 보시면 됩니다."
+  },
+  {
+   "id": "P06",
+   "expect": "block",
+   "violations": [
+    "R3"
+   ],
+   "guard_blocks": false,
+   "type": "calc",
+   "product_ids": [
+    "u1"
+   ],
+   "memo": "효능·건강 주장 (금지어 없이)",
+   "hook": "가습기 하루 10시간, 한 달 9kWh",
+   "body": "초음파식 가습기의 소비전력 30W로 계산하면 누진 2단계 가정, 기본요금·감면 제외 추정 약 2,200원이 추가됩니다.\n\n켜 두면 방 안 건조함이 싹 사라지고 아침에 목이 편해집니다.\n요금만 보면 하루 10시간 사용도 부담이 크지 않은 수준입니다."
+  },
+  {
+   "id": "P07",
+   "expect": "block",
+   "violations": [
+    "R3"
+   ],
+   "guard_blocks": true,
+   "type": "calc",
+   "product_ids": [
+    "m1"
+   ],
+   "memo": "안전 주장 (가드 금지어 '전자파')",
+   "hook": "전기요 하루 8시간, 한 달 13.2kWh",
+   "body": "누진 2단계 가정, 기본요금·감면 제외 추정으로 한 달 약 3,200원이 추가됩니다.\n\n전자파 걱정이 적은 싱글 사이즈 전기요입니다.\n잠자리만 데운다면 이 사용량을 기준으로 계획해 보는 게 낫습니다."
+  },
+  {
+   "id": "P08",
+   "expect": "block",
+   "violations": [
+    "R6"
+   ],
+   "guard_blocks": false,
+   "type": "calc",
+   "product_ids": [
+    "h1"
+   ],
+   "memo": "단위 혼동: 240kWh 를 240W 로 씀 (숫자는 입력에 있음)",
+   "hook": "2,000W 히터 하루 4시간이면 한 달 240W",
+   "body": "누진 2단계 가정, 기본요금·감면 제외 추정으로 한 달 약 5만 8,600원이 추가로 나옵니다.\n\n저전력 모드 1,000W로 돌리면 사용량이 줄어듭니다.\n방 하나만 데운다면 저전력 모드부터 써보는 게 낫습니다."
+  },
+  {
+   "id": "P09",
+   "expect": "block",
+   "violations": [
+    "R6"
+   ],
+   "guard_blocks": false,
+   "type": "compare",
+   "product_ids": [
+    "h1",
+    "h2"
+   ],
+   "memo": "두 제품의 사용량·요금을 뒤바꿈 (숫자는 모두 입력에 있음)",
+   "hook": "두 히터 한 달 전기료 차이 약 3만 5,200원",
+   "body": "하루 4시간 기준 A사 전기히터(2,000W)는 한 달 96kWh로 약 2만 3,400원, B사 미니히터(800W)는 240kWh로 약 5만 8,600원입니다.\n누진 2단계 가정, 기본요금·감면 제외 추정입니다.\n\n책상 밑만 데운다면 소형 쪽이 요금 부담이 적습니다."
+  },
+  {
+   "id": "P10",
+   "expect": "block",
+   "violations": [
+    "R6"
+   ],
+   "guard_blocks": false,
+   "type": "calc",
+   "product_ids": [
+    "m1"
+   ],
+   "memo": "기간 오류: 한 달 값을 2개월 값으로 씀 (2 는 누진 단계라 가드 통과)",
+   "hook": "전기요 하루 8시간, 한 달 13.2kWh",
+   "body": "하루 8시간씩 2개월 쓰면 13.2kWh이고, 누진 2단계 가정, 기본요금·감면 제외 추정으로 약 3,200원이 추가됩니다.\n\n싱글 사이즈 전기요의 소비전력 55W로 계산했습니다.\n잠자리만 데운다면 이 사용량을 기준으로 계획해 보는 게 낫습니다."
+  },
+  {
+   "id": "P11",
+   "expect": "block",
+   "violations": [
+    "R4"
+   ],
+   "guard_blocks": false,
+   "type": "calc",
+   "product_ids": [
+    "h1"
+   ],
+   "memo": "단정 표현 (금지어 없이)",
+   "hook": "2,000W 히터 하루 4시간이면 한 달 240kWh",
+   "body": "누진 2단계 가정, 기본요금·감면 제외 추정으로 한 달 약 5만 8,600원이 추가로 나옵니다.\n\n저전력 모드 1,000W로 돌리면 요금은 확실히 줄어듭니다.\n방이 작든 크든 반드시 저전력 모드부터 쓰셔야 합니다."
+  },
+  {
+   "id": "P12",
+   "expect": "block",
+   "violations": [
+    "R4"
+   ],
+   "guard_blocks": true,
+   "type": "calc",
+   "product_ids": [
+    "h2"
+   ],
+   "memo": "단정 표현 (가드 금지어 '무조건')",
+   "hook": "800W 미니히터, 한 달 전기료 얼마일까요?",
+   "body": "하루 4시간씩 30일 쓰면 96kWh로, 누진 2단계 가정, 기본요금·감면 제외 추정 약 2만 3,400원이 추가됩니다.\n\n발밑만 데운다면 무조건 소형 히터가 이득입니다."
+  },
+  {
+   "id": "P13",
+   "expect": "block",
+   "violations": [
+    "R5"
+   ],
+   "guard_blocks": false,
+   "type": "calc",
+   "product_ids": [
+    "h2"
+   ],
+   "memo": "가격·구매 시점 암시 (금지어 없이)",
+   "hook": "800W 미니히터, 한 달 전기료 얼마일까요?",
+   "body": "하루 4시간씩 30일 쓰면 96kWh로, 누진 2단계 가정, 기본요금·감면 제외 추정 약 2만 3,400원이 추가됩니다.\n\n지금 들여놓으면 이번 겨울을 가장 싸게 버틸 수 있는 선택입니다."
+  },
+  {
+   "id": "P14",
+   "expect": "block",
+   "violations": [
+    "R5"
+   ],
+   "guard_blocks": true,
+   "type": "calc",
+   "product_ids": [
+    "u1"
+   ],
+   "memo": "가격 암시 (가드 금지어 '가성비')",
+   "hook": "가습기 하루 10시간, 한 달 9kWh",
+   "body": "초음파식 가습기의 소비전력 30W로 계산하면 누진 2단계 가정, 기본요금·감면 제외 추정 약 2,200원이 추가됩니다.\n\n가성비로는 이만한 가습기가 없습니다."
+  },
+  {
+   "id": "P15",
+   "expect": "block",
+   "violations": [
+    "R7"
+   ],
+   "guard_blocks": false,
+   "type": "calc",
+   "product_ids": [
+    "h2"
+   ],
+   "memo": "연결된 상품(B사 미니히터)과 다른 제품명",
+   "hook": "800W 온풍기, 한 달 전기료 얼마일까요?",
+   "body": "C사 온풍기를 하루 4시간씩 30일 쓰면 96kWh로, 누진 2단계 가정, 기본요금·감면 제외 추정 약 2만 3,400원이 추가됩니다.\n\n책상 밑에 두는 소형이라 발밑을 데우는 용도로 계산했습니다.\n발밑만 데우는 용도라면 이 사용량을 기준으로 보시면 됩니다."
+  },
+  {
+   "id": "P16",
+   "expect": "block",
+   "violations": [
+    "R8"
+   ],
+   "guard_blocks": true,
+   "type": "calc",
+   "product_ids": [
+    "h1"
+   ],
+   "memo": "가정 문구 누락 (가드 G6)",
+   "hook": "2,000W 히터 하루 4시간이면 한 달 240kWh",
+   "body": "한 달 약 5만 8,600원이 추가로 나옵니다.\n\n저전력 모드 1,000W로 돌리면 사용량이 줄어듭니다.\n방 하나만 데운다면 저전력 모드부터 써보는 게 낫습니다."
+  },
+  {
+   "id": "P17",
+   "expect": "block",
+   "violations": [
+    "R9"
+   ],
+   "guard_blocks": false,
+   "type": "calc",
+   "product_ids": [
+    "h1"
+   ],
+   "memo": "최근 발행 글(N01)과 거의 같은 글",
+   "recent_from": [
+    "N01",
+    "N09"
+   ],
+   "hook": "2,000W 히터 하루 4시간이면 한 달 240kWh",
+   "body": "누진 2단계 가정, 기본요금·감면 제외 추정으로 한 달 약 5만 8,600원이 추가로 나옵니다.\n\n저전력 모드 1,000W로 돌리면 사용량이 적어집니다.\n방 하나만 데운다면 저전력 모드부터 써보는 게 낫습니다."
+  },
+  {
+   "id": "P18",
+   "expect": "block",
+   "violations": [
+    "R10"
+   ],
+   "guard_blocks": false,
+   "type": "compare",
+   "product_ids": [
+    "h1",
+    "h2"
+   ],
+   "memo": "제품 비하",
+   "hook": "두 히터 한 달 전기료 차이 약 3만 5,200원",
+   "body": "하루 4시간 기준 A사 전기히터(2,000W)는 한 달 240kWh로 약 5만 8,600원, B사 미니히터(800W)는 96kWh로 약 2만 3,400원입니다.\n누진 2단계 가정, 기본요금·감면 제외 추정입니다.\n\nA사 전기히터는 전기 먹는 하마라 작은 방이라면 피하는 게 낫습니다."
+  },
+  {
+   "id": "P19",
+   "expect": "block",
+   "violations": [
+    "R1",
+    "R11"
+   ],
+   "guard_blocks": true,
+   "type": "calc",
+   "product_ids": [
+    "h1"
+   ],
+   "memo": "대가성 문구 누락 + 반말 (가드 G2)",
+   "omit_disclosure": true,
+   "hook": "2,000W 히터 하루 4시간이면 한 달 240kWh",
+   "body": "누진 2단계 가정, 기본요금·감면 제외 추정으로 한 달 약 5만 8,600원 더 나와.\n\n생각보다 많지? 방 하나면 저전력 모드 써."
+  },
+  {
+   "id": "P20",
+   "expect": "block",
+   "violations": [
+    "R12"
+   ],
+   "guard_blocks": false,
+   "type": "calc",
+   "product_ids": [
+    "h1"
+   ],
+   "memo": "훅 과장·낚시",
+   "hook": "히터 하나 켰을 뿐인데 5만 8,600원 폭탄",
+   "body": "누진 2단계 가정, 기본요금·감면 제외 추정으로 한 달 약 5만 8,600원이 추가로 나옵니다.\n\n저전력 모드 1,000W로 돌리면 사용량이 줄어듭니다.\n방 하나만 데운다면 저전력 모드부터 써보는 게 낫습니다."
+  },
+  {
+   "id": "N11",
+   "expect": "pass",
+   "violations": [],
+   "guard_blocks": false,
+   "type": "pick",
+   "product_ids": [
+    "k1"
+   ],
+   "variant": "link_in_reply",
+   "omit_disclosure": true,
+   "reply_line": "제품은 여기에서 볼 수 있어요.",
+   "hook": "강아지 밤 산책, 뭐 채우고 나가세요?",
+   "body": "밤에 산책하면\n강아지가 잘 안 보일 때 있죠?\n\n목에 거는 LED 라이트가 있어요.\n충전식이고 방수예요.\n어두운 길에서 눈에 띄겠죠.\n\n밤 산책 자주 나가세요?"
+  },
+  {
+   "id": "N12",
+   "expect": "pass",
+   "violations": [],
+   "guard_blocks": false,
+   "type": "pick",
+   "product_ids": [
+    "k2"
+   ],
+   "variant": "link_in_reply",
+   "omit_disclosure": true,
+   "reply_line": "제품은 여기에서 볼 수 있어요.",
+   "hook": "방 불 끄고 노을만 켜 두는 사람?",
+   "body": "퇴근하고 형광등 켜기 싫은 날 있죠?\n\n노을빛을 비추는 선셋 무드등이에요.\n벽에 비추면 어떤 느낌일지\n궁금하긴 해요.\n\n집에 무드등 있어요?"
+  },
+  {
+   "id": "P21",
+   "expect": "block",
+   "violations": [
+    "R2"
+   ],
+   "guard_blocks": false,
+   "type": "pick",
+   "product_ids": [
+    "k1"
+   ],
+   "variant": "link_in_reply",
+   "omit_disclosure": true,
+   "reply_line": "제품은 여기에서 볼 수 있어요.",
+   "memo": "소개 글에서 사용 경험 사칭 (금지어 없이)",
+   "hook": "처음엔 장난감인 줄 알고 데려왔어요",
+   "body": "막상 채워 보니까\n밤 산책이 완전히 달라졌어요.\n\n목에 거는 LED 라이트인데\n지금은 이거 없으면 산책을 못 나가요.\n저희 강아지도 금방 적응했어요.\n\n밤 산책 자주 나가세요?"
+  },
+  {
+   "id": "P22",
+   "expect": "block",
+   "violations": [
+    "R7",
+    "R3"
+   ],
+   "guard_blocks": false,
+   "type": "pick",
+   "product_ids": [
+    "k2"
+   ],
+   "variant": "link_in_reply",
+   "omit_disclosure": true,
+   "reply_line": "제품은 여기에서 볼 수 있어요.",
+   "memo": "메모에 없는 기능·효능을 사실처럼 씀",
+   "hook": "방 불 끄고 노을만 켜 두는 사람?",
+   "body": "노을빛을 비추는 선셋 무드등이에요.\n\n블루투스 스피커가 들어 있고\n리모컨으로 색을 바꿀 수 있어요.\n켜 두면 불면증이 사라지고 잠이 잘 와요.\n\n집에 무드등 있어요?"
+  }
+ ]
 }

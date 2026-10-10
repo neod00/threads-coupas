@@ -40,7 +40,7 @@ from settings import PROJECT_ROOT, Config
 log = logging.getLogger("threads_coupas")
 
 PROMPTS_DIR = PROJECT_ROOT / "prompts"
-POST_TYPES = ("calc", "compare", "tip")
+POST_TYPES = ("calc", "compare", "pick", "tip")     # pick: 전기요금 계산 없는 상품 소개 글 (2026-10-10)
 VARIANTS = ("link_in_body", "link_in_reply")
 HOOK_STYLES = ("question", "result", "compare")     # 동률일 때 이 순서
 HOOK_WINDOW_DAYS = 7
@@ -93,14 +93,10 @@ def _read_prompt(name: str) -> str:
 
 def system_prompt(cfg: Config, post_type: str, variant: str | None) -> str:
     reply_spec = (
-        '"링크 답글에 넣을 안내 한 문장 (예: 소비전력 표기는 상품 페이지에서 확인할 수 있습니다.)"'
+        '"링크 답글에 넣을 안내 한 문장, 해요체 (예: 제품은 여기에서 볼 수 있어요.)"'
         if variant == "link_in_reply" else "null"
     )
-    number_rule = (
-        "calc·compare 훅에는 계산 데이터의 숫자를 1개 이상 넣되, 전기요금(원)을 앞세웁니다 (월 추정 요금, 하루 환산 요금, "
-        "두 제품의 요금 차이). kWh·W 는 훅에 꼭 넣지 않아도 됩니다."
-        if post_type != "tip" else "tip 훅에는 숫자가 없어도 됩니다. 숫자를 쓰면 계산 데이터의 값만 씁니다."
-    )
+    number_rule = "훅에 숫자가 없어도 됩니다. 숫자를 쓰면 데이터에 있는 값만 씁니다. kWh·W 로 시작하지 않습니다."
     return _read_prompt("threads_base.md").format(
         banned_words=", ".join(cfg.banned_words),
         banned_hook_phrases=", ".join(cfg.banned_hook_phrases),
@@ -142,7 +138,7 @@ def pick_products(products: Sequence[Product], post_type: str, day: date,
     """최근에 쓴 상품을 빼고 날짜 기준으로 돌아가며 고른다 (티스토리 climateSeeds.ts selectSeedsForRun 방식).
     compare 는 같은 카테고리의 두 상품을 고르고, 소비전력이 큰 쪽을 a 로 둔다."""
     recent = set(recent_ids)
-    ordered = sorted(products, key=lambda p: p.product_id)
+    ordered = sorted((p for p in products if p.has_power), key=lambda p: p.product_id)
     if post_type == "compare":
         pairs = [
             tuple(sorted(pair, key=lambda p: (-p.power_w, p.product_id)))
@@ -184,6 +180,8 @@ def subject_key(post: dict) -> str | None:
     try:
         if post.get("type") == "tip":
             return f"tip|{payload['tip_topic']}"
+        if post.get("type") == "pick":
+            return f"pick|{ids}" if ids else None
         if post.get("type") == "calc":
             return f"calc|{ids}|{_hours_key(payload['hours_per_day'])}"
         if post.get("type") == "compare":
@@ -195,9 +193,13 @@ def subject_key(post: dict) -> str | None:
 
 def subjects(products: Sequence[Product], post_type: str) -> list[dict]:
     """고를 수 있는 모든 주제: {key, picked, hours, tip_topic}."""
-    ordered = sorted(products, key=lambda p: p.product_id)
+    everything = sorted(products, key=lambda p: p.product_id)
+    ordered = [p for p in everything if p.has_power]        # 전기요금 계산은 소비전력이 있는 상품만
     if post_type == "tip":
         return [{"key": f"tip|{t}", "picked": [], "hours": None, "tip_topic": t} for t in TIP_TOPICS]
+    if post_type == "pick":
+        return [{"key": f"pick|{p.product_id}", "picked": [p], "hours": None, "tip_topic": None}
+                for p in everything if not p.has_power]
     if post_type == "calc":
         return [{"key": f"calc|{p.product_id}|{_hours_key(h)}", "picked": [p], "hours": h, "tip_topic": None}
                 for p in ordered for h in hour_options(p.default_hours)]
@@ -261,6 +263,10 @@ def hook_style_order(history: Iterable[dict], now: datetime) -> list[str]:
 def build_payload(post_type: str, picked: Sequence[Product], tariff: Tariff, tip_topic: str | None = None,
                   day: date | None = None, hours=None) -> dict:
     """LLM·가드·검수자가 함께 보는 calc_payload. 게시물의 모든 숫자는 여기에 있어야 한다."""
+    if post_type == "pick":
+        # 소개 글: 숫자는 상품명·메모에 있는 것만 쓸 수 있다 (가드 G3)
+        p = picked[0]
+        return {"product": {"name": p.name, "category": p.category, "note": p.note}}
     if post_type == "calc":
         p = picked[0]
         payload = {"product": {"name": p.name, "note": p.note},
@@ -370,9 +376,13 @@ def assemble(post_type: str, variant: str | None, draft: dict, hook: dict, cfg: 
               "variant": None, "hook_style": hook["style"], "topic_tag": _topic_tag(draft.get("topic_tag"))}
     if post_type == "tip":
         return fields
-    fields.update(text=f"{cfg.disclosure_text}\n{hook['text']}\n\n{body}", has_link=True, link_url=link, variant=variant)
+    fields.update(has_link=True, link_url=link, variant=variant)
     if variant == "link_in_reply":
-        fields["reply_text"] = f"{cfg.disclosure_text}\n\n{_clean(draft.get('reply_line'))}"
+        # 2026-10-10 결정: 본문에는 대가성 문구·링크를 넣지 않고, 첫 답글에 문구(첫 줄)와 링크를 둔다
+        fields["reply_text"] = f"{cfg.disclosure_text}\n\n{_clean(draft.get('reply_line'))}".strip()
+    else:
+        # 예전 형식 (더 이상 생성하지 않음): 본문에 링크가 있으면 본문 첫 줄이 대가성 문구
+        fields["text"] = f"{cfg.disclosure_text}\n{hook['text']}\n\n{body}"
     return fields
 
 
@@ -392,7 +402,7 @@ def _run_checks(post: dict, checks: Sequence[CheckFn]) -> tuple[list, list[dict]
 # ── 생성 + 훅 교체 + 재생성 루프 ──────────────────────────────────────
 
 def generate_post(post_type: str, picked: Sequence[Product], tariff: Tariff, cfg: Config, complete: CompleteFn, *,
-                  variant: str = "link_in_body", tip_topic: str | None = None,
+                  variant: str = "link_in_reply", tip_topic: str | None = None,
                   checks: Sequence[CheckFn] = (), history: Iterable[dict] = (),
                   max_attempts: int = MAX_ATTEMPTS, now: datetime | None = None,
                   hours=None, recent_texts: Sequence[str] = ()) -> dict:
@@ -489,7 +499,7 @@ def main() -> int:
     logging.basicConfig(level=logging.INFO, format="%(levelname)s %(message)s", stream=sys.stderr)
     ap = argparse.ArgumentParser(description="초안 생성 (DB 저장 없이 JSON 출력)")
     ap.add_argument("--type", choices=POST_TYPES, required=True)
-    ap.add_argument("--variant", choices=VARIANTS, default="link_in_body")
+    ap.add_argument("--variant", choices=VARIANTS, default="link_in_reply")
     ap.add_argument("--count", type=int, default=1)
     args = ap.parse_args()
     try:
@@ -507,7 +517,10 @@ def main() -> int:
     day, drafts = today_kst(), []
     for i in range(args.count):
         # tip 은 예시 계산에 쓸 상품 1개를 고른다 (링크는 붙이지 않음)
-        picked = pick_products(products, "calc" if args.type == "tip" else args.type, day, offset=i)
+        if args.type == "pick":
+            picked = pick_subject(products, "pick", day, offset=i)["picked"]
+        else:
+            picked = pick_products(products, "calc" if args.type == "tip" else args.type, day, offset=i)
         topic = TIP_TOPICS[(day.toordinal() + i) % len(TIP_TOPICS)] if args.type == "tip" else None
         drafts.append(generate_post(args.type, picked, tariff, cfg, complete, variant=args.variant, tip_topic=topic))
     print(json.dumps(drafts, ensure_ascii=False, indent=2))

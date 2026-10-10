@@ -13,6 +13,7 @@ from datetime import date, datetime, timedelta, timezone
 import pytest
 
 import generator
+import guard
 from products import CATEGORIES
 
 NOW = datetime(2026, 11, 2, 11, 0, tzinfo=timezone.utc)      # KST 20:00
@@ -45,6 +46,7 @@ def ok(body=BODY, hooks=HOOKS, reply_line=None, topic_tag="전기요금"):
 
 def gen(cfg, tariff, products, llm, **kw):
     kw.setdefault("now", NOW)
+    kw.setdefault("variant", "link_in_body")     # 예전 형식 (본문에 링크). 새 형식은 아래 v3 테스트에서 본다
     return generator.generate_post(kw.pop("post_type", "calc"), kw.pop("picked", [products[0]]), tariff, cfg, llm, **kw)
 
 
@@ -179,12 +181,16 @@ def test_link_post_layout(cfg, tariff, products):
     assert (post["review_result"], post["review_model"], post["review_attempts"]) == (None, None, 0)
 
 
-def test_link_in_reply_puts_disclosure_in_both(cfg, tariff, products):
+def test_link_in_reply_puts_disclosure_only_in_reply(cfg, tariff, products):
     llm = FakeLLM(ok(reply_line="소비전력 표기는 상품 페이지에서 확인할 수 있습니다."))
     post = gen(cfg, tariff, products, llm, variant="link_in_reply")
-    assert post["text"].split("\n")[0] == cfg.disclosure_text
+    # 2026-10-10 결정: 본문에는 대가성 문구·링크가 없고, 첫 답글의 첫 줄이 대가성 문구다
+    assert cfg.disclosure_text not in post["text"] and "http" not in post["text"]
+    assert post["text"].split("\n")[0] == post["hook_candidates"][0]["text"]
     assert post["reply_text"].split("\n")[0] == cfg.disclosure_text
     assert post["reply_text"].endswith("확인할 수 있습니다.")
+    assert post["has_link"] and post["link_url"] == products[0].link and post["variant"] == "link_in_reply"
+    assert guard.check_post(post, cfg) == []
     assert '"링크 답글에 넣을 안내 한 문장' in llm.calls[0]["system"]
 
 
@@ -236,7 +242,8 @@ def test_prompt_carries_rules_and_data(cfg, tariff, products):
     system, user = llm.calls[0]["system"], llm.calls[0]["user"]
     assert "최저가" in system and "전자파" in system                 # 금지어 (가격·안전)
     assert "이거 모르면 손해" in system                              # 금지 훅 문구
-    assert "30자 이내" in system and "숫자를 1개 이상" in system       # 훅 규칙
+    assert "30자 이내" in system and "숫자가 없어도 됩니다" in system    # 훅 규칙 (2026-10-10: 숫자 강제 없음)
+    assert "해요체" in system and "써 본 것처럼" in system             # 말투, 경험 사칭 금지
     assert str(cfg.limits.max_body_chars) in system
     assert "누진 2단계 가정, 기본요금·감면 제외 추정" in user
 
@@ -331,10 +338,11 @@ def test_tip_payload_stays_free_of_costs(cfg, tariff, products):
 
 
 def test_system_prompt_puts_money_before_kwh(cfg):
-    calc = generator.system_prompt(cfg, "calc", "link_in_body")
-    assert "전기요금(원)을 앞세웁니다" in calc
-    assert "situation_hint" in calc and "가정형" in calc
+    calc = generator.system_prompt(cfg, "calc", "link_in_reply")
+    assert "kWh·W 로 시작하지 않습니다" in calc
+    assert "situation_hint" in calc and "가정하는" in calc
     assert "경험" in calc                                       # 사용 경험 금지는 그대로 (PLAN 규칙)
+    assert "est_daily_cost_label" in generator.user_message("calc", {})
     tip = generator.system_prompt(cfg, "tip", None)
     assert "숫자가 없어도 됩니다" in tip
 

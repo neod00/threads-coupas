@@ -26,7 +26,8 @@ import re
 from settings import Config
 
 HOOK_MAX_CHARS = 30
-LINK_POST_TYPES = ("calc", "compare")
+CALC_POST_TYPES = ("calc", "compare")           # 전기요금 계산 글: 가정 문구 필수 (G6)
+LINK_POST_TYPES = ("calc", "compare", "pick")   # 링크가 붙는 글
 URL_RE = re.compile(r"https?://[^\s<>\"')\]]+", re.IGNORECASE)
 
 # 이모지·그림 기호. 스레드는 이모지를 UTF-8 바이트로 세어 글자 수가 틀어진다.
@@ -141,9 +142,9 @@ def _lines(text: str) -> list[str]:
 
 
 def hook_line(post: dict) -> str:
-    """훅 위치의 문장: 링크 글은 둘째 줄, tip 은 첫 줄."""
+    """훅 위치의 문장: 본문 첫 줄. 예전 형식(본문 첫 줄이 대가성 문구)이면 둘째 줄."""
     lines = _lines(post.get("text"))
-    index = 1 if post.get("type") in LINK_POST_TYPES else 0
+    index = 1 if lines and lines[0].lstrip().startswith("[광고]") else 0
     return lines[index].strip() if len(lines) > index else ""
 
 
@@ -174,9 +175,13 @@ def check_post(post: dict, cfg: Config) -> list[str]:
     link_in_reply = post.get("variant") == "link_in_reply"
     reply_has_link = bool(reply_urls) or (bool(link_url) and link_in_reply)
     has_link = bool(post.get("has_link") or link_url or text_urls or reply_urls)
-    if has_link and _lines(text)[0] != disclosure:
-        problems.append("[G2] 링크가 있는 글인데 본문 첫 줄이 대가성 문구가 아닙니다")
-    if reply_has_link and _lines(reply)[0] != disclosure:
+    # 2026-10-10 결정: 링크와 대가성 문구는 첫 답글에 둔다. 링크가 있는 곳(본문이든 답글이든)의 첫 줄은 대가성 문구여야 한다.
+    body_has_link = bool(text_urls) or (bool(link_url) and not link_in_reply)
+    if body_has_link and _lines(text)[0] != disclosure:
+        problems.append("[G2] 본문에 링크가 있는데 본문 첫 줄이 대가성 문구가 아닙니다")
+    if has_link and link_in_reply and not reply.strip():
+        problems.append("[G2] 링크 글인데 링크와 대가성 문구를 넣을 답글이 없습니다")
+    elif reply_has_link and _lines(reply)[0] != disclosure:
         problems.append("[G2] 링크가 있는 답글인데 답글 첫 줄이 대가성 문구가 아닙니다")
 
     # G3 숫자 (규칙 7)
@@ -200,7 +205,7 @@ def check_post(post: dict, cfg: Config) -> list[str]:
         problems.append(f"[G5] URL 이 {len(urls)}개입니다 (최대 {cfg.limits.max_urls}개, 본문·답글·링크 첨부 합계)")
 
     # G6 가정 문구
-    if post_type in LINK_POST_TYPES:
+    if post_type in CALC_POST_TYPES:
         assumption = payload.get("assumption_text")
         if not assumption:
             problems.append("[G6] calc_payload 에 assumption_text 가 없습니다")
@@ -209,14 +214,11 @@ def check_post(post: dict, cfg: Config) -> list[str]:
 
     # G7 훅
     hook = hook_line(post)
-    where = "둘째 줄" if post_type in LINK_POST_TYPES else "첫 줄"
+    # 2026-10-10: 훅은 궁금증으로 시작해도 되므로 숫자를 강제하지 않는다 (숫자를 쓰면 G3 가 값을 검사한다)
     if not hook:
-        problems.append(f"[G7] 훅 위치({where})가 비어 있습니다")
-    else:
-        if len(hook) > HOOK_MAX_CHARS:
-            problems.append(f"[G7] 훅이 깁니다: {len(hook)}자 (최대 {HOOK_MAX_CHARS}자): \"{hook}\"")
-        if post_type in LINK_POST_TYPES and not (extract_numbers(hook) & allowed):
-            problems.append(f"[G7] 훅에 계산 데이터의 숫자가 없습니다: \"{hook}\"")
+        problems.append("[G7] 훅 위치(첫 줄)가 비어 있습니다")
+    elif len(hook) > HOOK_MAX_CHARS:
+        problems.append(f"[G7] 훅이 깁니다: {len(hook)}자 (최대 {HOOK_MAX_CHARS}자): \"{hook}\"")
 
     # G8 금지 훅 문구
     for name, part in parts.items():

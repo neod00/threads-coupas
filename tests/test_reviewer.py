@@ -68,7 +68,7 @@ def generate(cfg, tariff, products, claude, llm=None):
     rev = reviewer.Reviewer(cfg, claude)
     check = reviewer.make_check(rev, reviewer.product_rows([products[0]]), ["최근 글 1"])
     llm = llm or FakeLLM()
-    post = generator.generate_post("calc", [products[0]], tariff, cfg, llm, checks=[check], now=NOW)
+    post = generator.generate_post("calc", [products[0]], tariff, cfg, llm, checks=[check], now=NOW, variant="link_in_body")
     return post, llm
 
 
@@ -142,7 +142,7 @@ def test_all_pass_becomes_approved(cfg, tariff, products):
 
 def test_guard_only_gives_draft_not_approved(cfg, tariff, products):
     # 규칙 4: 검수자를 거치지 않은 글은 approved 가 되지 않는다
-    post = generator.generate_post("calc", [products[0]], tariff, cfg, FakeLLM(), now=NOW)
+    post = generator.generate_post("calc", [products[0]], tariff, cfg, FakeLLM(), now=NOW, variant="link_in_body")
     assert post["status"] == "draft"
 
 
@@ -172,7 +172,7 @@ def test_fail_after_two_regenerations_is_held(cfg, tariff, products):
 
 def test_reviewer_only_sees_guard_passed_posts(cfg, tariff, products):
     # 가드에 걸리는 훅(compare: 이 상품 데이터에 없는 숫자 없음 → 여기서는 숫자 없는 훅)은 검수 요청을 보내지 않는다
-    hooks = [{"style": s, "text": "전기히터 한 달 요금은?"} for s in ("question", "result", "compare")]
+    hooks = [{"style": s, "text": "전기히터를 하루 종일 켜 두면 한 달 요금은 과연 얼마나 나올까요?"} for s in ("question", "result", "compare")]
 
     class NoNumberLLM(FakeLLM):
         def __call__(self, system, user, temperature):
@@ -277,7 +277,7 @@ def test_openai_review_request_shape(monkeypatch):
 
     captured.clear()
     reviewer.make_openai_call("k", "gpt-5.4-mini")("sys", "user")
-    assert captured["reasoning_effort"] == "low"                           # 추론 모델: 짧게 생각
+    assert captured["reasoning_effort"] == "medium"                        # 추론 모델: low 는 시험에서 문제 글을 가끔 놓쳐 medium (2026-10-10)
     assert "temperature" not in captured                                   # 추론 모델은 temperature 를 받지 않는다
 
 

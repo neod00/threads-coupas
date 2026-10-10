@@ -21,7 +21,7 @@ on:
         required: false
         type: choice
         options: [link_in_body, link_in_reply]
-        default: link_in_body
+        default: link_in_reply
 
 permissions:
   contents: read
@@ -54,7 +54,7 @@ jobs:
           TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
           TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
           INPUT_DRY_RUN: ${{ inputs.dry_run }}
-          INPUT_VARIANT: ${{ inputs.variant || 'link_in_body' }}
+          INPUT_VARIANT: ${{ inputs.variant || 'link_in_reply' }}
         run: |
           set -euo pipefail
           args=(generate --variant "${INPUT_VARIANT}")

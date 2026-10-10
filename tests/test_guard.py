@@ -131,10 +131,12 @@ def _with_hook(post, hook):
     post["text"] = "\n".join(lines)
 
 
-def test_hook_without_number_blocked(cfg, calc_post):
+def test_hook_without_number_allowed(cfg, calc_post):
+    # 2026-10-10: 훅은 궁금증으로 시작해도 된다. 숫자를 쓰면 G3 가 값을 검사한다
     _with_hook(calc_post, "전기히터 한 달 요금은 얼마일까요?")
-    problems = guard.check_post(calc_post, cfg)
-    assert any(p.startswith("[G7]") and "숫자가 없습니다" in p for p in problems)
+    assert guard.check_post(calc_post, cfg) == []
+    _with_hook(calc_post, "전기히터 한 달 999kWh")
+    assert "G3" in codes(guard.check_post(calc_post, cfg))
 
 
 def test_31_char_hook_blocked(cfg, calc_post):
@@ -186,13 +188,13 @@ NOW = datetime(2026, 11, 2, 11, 0, tzinfo=timezone.utc)
 
 
 def test_guard_failure_swaps_hook_before_regenerating(cfg, tariff, products):
-    # 기록이 없으면 question 을 먼저 쓴다. question 훅은 숫자가 없어 G7 → LLM 재호출 없이 result 로 교체
+    # 기록이 없으면 question 을 먼저 쓴다. question 훅이 30자를 넘어 G7 → LLM 재호출 없이 result 로 교체
     llm = FakeLLM(draft([
-        {"style": "question", "text": "전기히터 한 달 요금은 얼마일까요?"},
+        {"style": "question", "text": "전기히터를 하루 종일 켜 두면 한 달 요금은 과연 얼마나 나올까요?"},
         {"style": "result", "text": CALC_HOOK},
         {"style": "compare", "text": "두 방식의 한 달 차이는?"},
     ]))
-    post = generator.generate_post("calc", [products[0]], tariff, cfg, llm, now=NOW)
+    post = generator.generate_post("calc", [products[0]], tariff, cfg, llm, now=NOW, variant="link_in_body")
     assert post["status"] == "draft"
     assert post["hook_style"] == "result"
     assert post["text"].split("\n")[1] == CALC_HOOK
@@ -203,10 +205,10 @@ def test_guard_failure_swaps_hook_before_regenerating(cfg, tariff, products):
 
 
 def test_all_hooks_fail_then_regenerates_with_guard_feedback(cfg, tariff, products):
-    no_numbers = [{"style": s, "text": "전기히터 한 달 요금은?"} for s in ("question", "result", "compare")]
+    no_numbers = [{"style": s, "text": "전기히터를 하루 종일 켜 두면 한 달 요금은 과연 얼마나 나올까요?"} for s in ("question", "result", "compare")]
     good = [{"style": s, "text": CALC_HOOK} for s in ("question", "result", "compare")]
     llm = FakeLLM(draft(no_numbers), draft(good))
-    post = generator.generate_post("calc", [products[0]], tariff, cfg, llm, now=NOW)
+    post = generator.generate_post("calc", [products[0]], tariff, cfg, llm, now=NOW, variant="link_in_body")
     assert post["status"] == "draft"
     assert len(llm.calls) == 2
     assert "[G7]" in llm.calls[1]                     # 가드 사유를 생성기에 돌려준다
@@ -216,7 +218,7 @@ def test_all_hooks_fail_then_regenerates_with_guard_feedback(cfg, tariff, produc
 def test_guard_cannot_be_skipped_by_caller(cfg, tariff, products):
     # checks 를 비워도 코드 가드는 항상 돈다
     llm = FakeLLM(*[draft([{"style": s, "text": "최저가 확인하세요"} for s in ("question", "result", "compare")])] * 3)
-    post = generator.generate_post("calc", [products[0]], tariff, cfg, llm, checks=(), now=NOW)
+    post = generator.generate_post("calc", [products[0]], tariff, cfg, llm, checks=(), now=NOW, variant="link_in_body")
     assert post["status"] == "held"
 
 
@@ -228,8 +230,21 @@ def test_reply_with_link_needs_disclosure(cfg, calc_post):
     assert any("답글 첫 줄" in p for p in problems)
 
 
-def test_link_in_reply_still_needs_disclosure_in_body(cfg, calc_post):
+def test_link_in_reply_needs_disclosure_only_in_reply(cfg, calc_post):
+    # 2026-10-10 결정: 링크·대가성 문구는 첫 답글에만. 본문에는 문구가 없어도 된다
     calc_post.update(variant="link_in_reply", reply_text=f"{cfg.disclosure_text}\n\n{REPLY_LINE}")
+    calc_post["text"] = calc_post["text"].split("\n", 1)[1]
+    assert guard.check_post(calc_post, cfg) == []
+    # 답글 첫 줄이 문구가 아니면 막는다
+    calc_post["reply_text"] = f"{REPLY_LINE}\n{cfg.disclosure_text}"
+    assert any("답글 첫 줄" in p for p in guard.check_post(calc_post, cfg))
+    # 답글이 아예 없으면 막는다 (링크와 문구를 둘 곳이 없다)
+    calc_post["reply_text"] = None
+    assert any("답글이 없습니다" in p for p in guard.check_post(calc_post, cfg))
+
+
+def test_link_in_body_still_needs_disclosure_first(cfg, calc_post):
+    # 예전 형식이 남아 있으면 본문 첫 줄 문구를 계속 강제한다
     calc_post["text"] = calc_post["text"].split("\n", 1)[1]
     assert any("본문 첫 줄" in p for p in guard.check_post(calc_post, cfg))
 

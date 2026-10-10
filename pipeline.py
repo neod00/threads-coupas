@@ -32,16 +32,22 @@ USED_STATUSES = ("approved", "published")    # 주제 돌려 쓰기·반복 판�
 HOOK_HISTORY_DAYS = 7
 
 
-def plan_day(posts, cfg: Config, day, has_compare_pairs: bool) -> list[str]:
+def plan_day(posts, cfg: Config, day, has_compare_pairs: bool, has_picks: bool = False, has_calc: bool = True) -> list[str]:
     """그날 새로 만들 글 유형 목록. 빈 슬롯 수만큼, 링크 글은 링크 한도까지만."""
     occupied = [(t, link) for t, link in rules.occupied(posts) if rules.kst_date(t) == day]
     free = max(0, min(cfg.max_posts_per_day, len(cfg.slots_kst)) - len(occupied))
     link_quota = max(0, rules.max_link_posts_per_day(cfg) - sum(link for _, link in occupied))
     n_links = min(free, link_quota)
-    link_types = ["calc", "compare"] if has_compare_pairs else ["calc"]
-    # 날짜마다 calc/compare 시작 순서를 바꿔 두 유형이 고르게 쌓이게 한다
-    start = day.toordinal() % len(link_types)
-    links = [link_types[(start + i) % len(link_types)] for i in range(n_links)]
+    calc_types = ["calc", "compare"] if has_compare_pairs else ["calc"]
+    if not has_picks:
+        # 날짜마다 calc/compare 시작 순서를 바꿔 두 유형이 고르게 쌓이게 한다
+        start = day.toordinal() % len(calc_types)
+        links = [calc_types[(start + i) % len(calc_types)] for i in range(n_links)]
+    else:
+        # 2026-10-10: 링크 글의 첫 자리는 항상 소개(pick), 둘째 자리는 날짜마다 pick → calc → compare 로 돈다
+        second = (["pick"] + calc_types) if has_calc else ["pick"]
+        cycle = ["pick", second[day.toordinal() % len(second)]]
+        links = [cycle[i % len(cycle)] for i in range(n_links)]
     return links + ["tip"] * (free - n_links)
 
 
@@ -54,7 +60,7 @@ def _has_compare_pairs(products) -> bool:
 
 
 def run_generate(store, cfg: Config, tariff, products, *, complete, review_call, notifier, now: datetime,
-                 env=None, variant: str = "link_in_body", save: bool = True) -> dict:
+                 env=None, variant: str = "link_in_reply", save: bool = True) -> dict:
     from settings import auto_publish_disabled
 
     if auto_publish_disabled(env):
@@ -67,7 +73,8 @@ def run_generate(store, cfg: Config, tariff, products, *, complete, review_call,
     tomorrow = rules.kst_date(now) + timedelta(days=1)
     day_start = datetime.combine(tomorrow, datetime.min.time(), tzinfo=KST)
     occupying = store.list_posts(rules.OCCUPYING)
-    types = plan_day(occupying, cfg, tomorrow, _has_compare_pairs(products))
+    types = plan_day(occupying, cfg, tomorrow, _has_compare_pairs(products),
+                     has_picks=any(not p.has_power for p in products), has_calc=any(p.has_power for p in products))
     if not types:
         return {"action": "no_free_slot", "posts": []}
 
@@ -129,7 +136,7 @@ def main(argv=None) -> int:
     ap = argparse.ArgumentParser(description="다음 날 분량 생성 → 가드 → 검수 → 슬롯 배정")
     ap.add_argument("command", choices=["generate"])
     ap.add_argument("--dry-run", action="store_true", help="생성·검증만 하고 저장하지 않음")
-    ap.add_argument("--variant", choices=generator.VARIANTS, default="link_in_body")
+    ap.add_argument("--variant", choices=generator.VARIANTS, default="link_in_reply")
     ap.add_argument("--out", help="생성된 글 전체를 이 JSON 파일로 저장 (검토용)")
     args = ap.parse_args(argv)
 

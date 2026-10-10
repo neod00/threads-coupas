@@ -205,7 +205,10 @@ def test_swap_hook(cfg, world):
     updated, problems = actions.swap_hook(store, cfg, pid, "question")
     assert problems == [] and updated["hook_style"] == "question"
     assert updated["text"].split("\n")[1] == "2,000W 히터 한 달 전기료는 얼마일까요?"
-    # 숫자 없는 훅은 가드에 걸려 저장되지 않는다
+    # 가드에 걸리는 훅은 저장되지 않는다 (2026-10-10 부터 숫자 없는 훅은 허용, 30자 초과는 여전히 막는다)
+    post = store.get_post(pid)
+    candidates = [dict(h, text="전기히터를 하루 종일 켜 두면 한 달 요금은 과연 얼마나 나올까요?") if h["style"] == "compare" else h for h in post["hook_candidates"]]
+    store.update_post(pid, {"hook_candidates": candidates})
     unchanged, problems = actions.swap_hook(store, cfg, pid, "compare")
     assert any(p.startswith("[G7]") for p in problems)
     assert store.get_post(pid)["hook_style"] == "question"
