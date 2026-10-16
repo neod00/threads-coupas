@@ -22,7 +22,7 @@ import logging
 import os
 import re
 import sys
-from dataclasses import dataclass, field, fields
+from dataclasses import MISSING, dataclass, field, fields
 from datetime import date, datetime, time, timedelta, timezone
 from pathlib import Path
 from typing import Mapping
@@ -292,6 +292,8 @@ class Config:
     criteria: Criteria
     digest_time_kst: time
     test_start_date: date | None
+    # 생성할 글 유형 (없으면 전부). 2026-10-16: 팁·계산·비교 글이 재미없다는 판단으로 pick 만 남김
+    post_types: tuple[str, ...] = ("calc", "compare", "pick", "tip")
 
 
 def provider_of(model: str) -> str:
@@ -343,7 +345,8 @@ def _check_keys(raw, cls, where: str) -> None:
     unknown = sorted(set(raw) - expected)
     if unknown:
         raise ConfigError(f"{where} 에 모르는 키가 있습니다 (오타 확인): " + ", ".join(map(str, unknown)))
-    missing = sorted(expected - set(raw))
+    optional = {f.name for f in fields(cls) if f.default is not MISSING}
+    missing = sorted(expected - optional - set(raw))
     if missing:
         raise ConfigError(f"{where} 에 빠진 키가 있습니다: " + ", ".join(missing))
 
@@ -450,6 +453,10 @@ def parse_config(raw) -> Config:
     criteria = Criteria(**{k: _int(v, f"criteria.{k}", 0) for k, v in raw["criteria"].items()})
 
     start = raw["test_start_date"]
+    types = raw.get("post_types", Config.post_types)
+    if (not isinstance(types, list | tuple) or not types
+            or any(t not in ("calc", "compare", "pick", "tip") for t in types)):
+        raise ConfigError(f"post_types 는 calc, compare, pick, tip 중 하나 이상의 목록이어야 합니다: {types!r}")
     return Config(
         max_posts_per_day=max_posts,
         min_gap_hours=min_gap,
@@ -465,6 +472,7 @@ def parse_config(raw) -> Config:
         criteria=criteria,
         digest_time_kst=_parse_hhmm(raw["digest_time_kst"], "digest_time_kst"),
         test_start_date=None if start is None else _parse_date(start, "test_start_date"),
+        post_types=tuple(types),
     )
 
 

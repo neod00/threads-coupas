@@ -154,3 +154,35 @@ def test_plan_day_without_picks_keeps_old_mix(cfg):
 
 def test_plan_day_with_only_picks(cfg):
     assert pipeline.plan_day([], cfg, date(2026, 10, 11), False, has_picks=True, has_calc=False) == ["pick", "pick", "tip", "tip"]
+
+
+# ── 2026-10-16: 글 유형 끄기 (config.yaml post_types) ──────────────────────────────
+
+def test_post_types_limit_plan(cfg):
+    import dataclasses
+    picks_only = dataclasses.replace(cfg, post_types=("pick",))
+    for d in range(11, 14):
+        assert pipeline.plan_day([], picks_only, date(2026, 10, d), True, has_picks=True, has_calc=True) == ["pick", "pick"]
+    # 소개 상품이 없는데 pick 만 켜져 있으면 아무것도 만들지 않는다
+    assert pipeline.plan_day([], picks_only, date(2026, 10, 11), True, has_picks=False, has_calc=True) == []
+    no_tip = dataclasses.replace(cfg, post_types=("pick", "calc"))
+    assert "tip" not in pipeline.plan_day([], no_tip, date(2026, 10, 11), False, has_picks=True, has_calc=True)
+
+
+def test_project_config_makes_only_picks():
+    from settings import load_config
+    assert load_config().post_types == ("pick",)
+
+
+def test_post_types_validation():
+    import copy
+    import yaml
+    from settings import PROJECT_ROOT, parse_config
+    raw = yaml.safe_load((PROJECT_ROOT / "config.yaml").read_text(encoding="utf-8"))
+    for bad in ([], ["review"], "pick"):
+        broken = copy.deepcopy(raw)
+        broken["post_types"] = bad
+        with pytest.raises(ConfigError):
+            parse_config(broken)
+    del raw["post_types"]
+    assert parse_config(raw).post_types == ("calc", "compare", "pick", "tip")     # 없으면 전부

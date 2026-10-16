@@ -38,8 +38,13 @@ def plan_day(posts, cfg: Config, day, has_compare_pairs: bool, has_picks: bool =
     free = max(0, min(cfg.max_posts_per_day, len(cfg.slots_kst)) - len(occupied))
     link_quota = max(0, rules.max_link_posts_per_day(cfg) - sum(link for _, link in occupied))
     n_links = min(free, link_quota)
-    calc_types = ["calc", "compare"] if has_compare_pairs else ["calc"]
-    if not has_picks:
+    allowed = cfg.post_types
+    calc_types = [t for t in (["calc", "compare"] if has_compare_pairs else ["calc"]) if t in allowed]
+    has_calc = has_calc and bool(calc_types)
+    has_picks = has_picks and "pick" in allowed
+    if not has_picks and not has_calc:
+        links = []
+    elif not has_picks:
         # 날짜마다 calc/compare 시작 순서를 바꿔 두 유형이 고르게 쌓이게 한다
         start = day.toordinal() % len(calc_types)
         links = [calc_types[(start + i) % len(calc_types)] for i in range(n_links)]
@@ -48,7 +53,8 @@ def plan_day(posts, cfg: Config, day, has_compare_pairs: bool, has_picks: bool =
         second = (["pick"] + calc_types) if has_calc else ["pick"]
         cycle = ["pick", second[day.toordinal() % len(second)]]
         links = [cycle[i % len(cycle)] for i in range(n_links)]
-    return links + ["tip"] * (free - n_links)
+    # 링크 없는 자리는 tip 이 켜져 있을 때만 채운다 (꺼져 있으면 그날은 링크 글만 나간다)
+    return links + (["tip"] * (free - n_links) if "tip" in allowed else [])
 
 
 def _has_compare_pairs(products) -> bool:
