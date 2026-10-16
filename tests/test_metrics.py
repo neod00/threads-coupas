@@ -239,7 +239,7 @@ def test_conversation_pagination_and_fields():
     replies = publisher.ThreadsApi("123", "T", session=http).conversation("m1")
     assert [r["id"] for r in replies] == ["1", "2"]
     assert http.calls[0][0] == "https://graph.threads.net/v1.0/m1/conversation"
-    assert http.calls[0][1]["fields"] == "id,text,username,timestamp,is_reply_owned_by_me"
+    assert http.calls[0][1]["fields"] == "id,text,username,permalink,timestamp,is_reply_owned_by_me"
     assert http.calls[1][1]["after"] == "A"
 
 

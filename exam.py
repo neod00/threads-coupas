@@ -23,6 +23,7 @@ from pathlib import Path
 import calculator
 import generator
 import reviewer as reviewer_mod
+from bundles import parse_bundles
 from products import parse_products
 from settings import PROJECT_ROOT, Config
 
@@ -50,23 +51,27 @@ def build_case(case: dict, data: dict, cfg: Config) -> tuple[dict, list[dict], l
     by_id = {p.product_id: p for p in parse_products(data["products"])}
     picked = [by_id[pid] for pid in case["product_ids"]]
     post_type = case["type"]
-    payload = generator.build_payload(post_type, picked, tariff, case.get("tip_topic"))
+    bundle = parse_bundles([case["bundle"]])[0] if post_type == "bundle" else None
+    payload = generator.build_payload(post_type, picked, tariff, case.get("tip_topic"), bundle=bundle)
     # 새 형식(link_in_reply)의 케이스는 omit_disclosure 로 본문에 대가성 문구를 두지 않는다
 
     head = f"{case['hook']}\n\n{case['body']}"
-    if post_type == "tip":
-        post = {"type": "tip", "text": head, "reply_text": None, "has_link": False, "link_url": None, "variant": None}
+    if post_type in generator.NO_LINK_TYPES:
+        post = {"type": post_type, "text": head, "reply_text": None, "has_link": False, "link_url": None, "variant": None}
     else:
         variant = case.get("variant", "link_in_body")
         text = head if case.get("omit_disclosure") else f"{cfg.disclosure_text}\n{head}"
         reply = f"{cfg.disclosure_text}\n\n{case['reply_line']}" if case.get("reply_line") else None
         post = {"type": post_type, "text": text, "reply_text": reply, "has_link": True,
-                "link_url": picked[0].link, "variant": variant}
+                "link_url": bundle.link if bundle else picked[0].link, "variant": variant}
     post["calc_payload"] = payload
 
     by_case = {c["id"]: c for c in data["cases"]}
     recent = [build_case(by_case[cid], data, cfg)[0]["text"] for cid in case.get("recent_from", [])]
-    rows = reviewer_mod.product_rows(picked) if post_type != "tip" else []
+    if bundle:
+        rows = [{"name": it.name, "note": it.note, "link": bundle.link} for it in bundle.items]
+    else:
+        rows = reviewer_mod.product_rows(picked) if post_type not in generator.NO_LINK_TYPES else []
     return post, rows, recent
 
 

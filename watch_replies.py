@@ -20,6 +20,8 @@ log = logging.getLogger("threads_coupas")
 WATCH_HOURS = 72
 SEEN_KEY = "seen_reply_ids"
 SEEN_LIMIT = 5000
+INBOX_KEY = "reply_inbox"       # 사람이 답해 줄 남의 답글 (일일 요약에 보여 줌. 자동으로 답하지 않는다 — 규칙 6)
+INBOX_LIMIT = 200
 
 
 def watch(store, api, notifier, now: datetime) -> dict:
@@ -28,6 +30,7 @@ def watch(store, api, notifier, now: datetime) -> dict:
              if p.get("threads_media_id") and rules.as_dt(p.get("published_at")) and rules.as_dt(p["published_at"]) >= since]
     seen = list(store.get_state(SEEN_KEY, []) or [])
     seen_set = set(seen)
+    inbox = list(store.get_state(INBOX_KEY, []) or [])
     checked, stopped = 0, False
     for post in posts:
         try:
@@ -42,9 +45,13 @@ def watch(store, api, notifier, now: datetime) -> dict:
             seen.append(rid)
             seen_set.add(rid)
             checked += 1
+            inbox.append({"post_id": post["id"], "reply_id": rid, "username": reply.get("username"),
+                          "text": (reply.get("text") or "")[:120], "permalink": reply.get("permalink"),
+                          "at": reply.get("timestamp") or now.isoformat()})
             if autostop.check_reply_text(store, notifier, reply.get("text") or "",
                                          {"post_id": post["id"], "reply_id": rid, "username": reply.get("username")}):
                 stopped = True
     store.set_state(SEEN_KEY, seen[-SEEN_LIMIT:])
+    store.set_state(INBOX_KEY, inbox[-INBOX_LIMIT:])
     log.info(f"[답글 감시] 글 {len(posts)}개, 새 답글 {checked}개{' — 자동 정지' if stopped else ''}")
     return {"posts": len(posts), "new_replies": checked, "stopped": stopped}

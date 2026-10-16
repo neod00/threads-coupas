@@ -133,7 +133,7 @@ class ThreadsApi:
         """GET /{media-id}/conversation: 깊이와 상관없이 모든 답글 (최신순)."""
         replies, after = [], None
         for _ in range(max_pages):
-            params = {"fields": "id,text,username,timestamp,is_reply_owned_by_me"}
+            params = {"fields": "id,text,username,permalink,timestamp,is_reply_owned_by_me"}
             if after:
                 params["after"] = after
             data = self._request("GET", f"{media_id}/conversation", **params)

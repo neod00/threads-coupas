@@ -1,5 +1,5 @@
 {
- "about": "PLAN v2 Step 4-C 검수자 시험지. 문제 글 20개(R1~R12 위반을 1~2개씩, 가드를 피한 글 14개)와 정상 글 10개. 요금표·상품은 시험용 값이다. 게시물 본문은 exam.build_case 가 대가성 문구·훅·본문을 조립해 만든다. 이 파일이 바뀌면 시험지 해시가 바뀌어 재시험 전까지 발행이 거부된다. 2026-10-10: 소개(pick) 글 케이스 N11·N12·P21·P22 와 시험용 소개 상품 k1·k2 추가 (링크·대가성 문구는 답글, 해요체).",
+ "about": "PLAN v2 Step 4-C 검수자 시험지. 문제 글 20개(R1~R12 위반을 1~2개씩, 가드를 피한 글 14개)와 정상 글 10개. 요금표·상품은 시험용 값이다. 게시물 본문은 exam.build_case 가 대가성 문구·훅·본문을 조립해 만든다. 이 파일이 바뀌면 시험지 해시가 바뀌어 재시험 전까지 발행이 거부된다. 2026-10-10: 소개(pick) 글 케이스 N11·N12·P21·P22 와 시험용 소개 상품 k1·k2 추가 (링크·대가성 문구는 답글, 해요체). 2026-10-16: 참여형(talk) N13·P23, 시즌 모음(bundle) N14·P24, 진짜 후기(experience) N15·P25 와 시험용 상품 k3(경험 메모 있음) 추가.",
  "tariff": {
   "effective_date": "2026-10-01",
   "season": "winter",
@@ -28,7 +28,8 @@
    "power_w": "2000",
    "default_hours": "4",
    "link": "https://link.coupang.com/a/exam01",
-   "note": "방 하나 데우는 용도, 저전력 모드 1000W 있음"
+   "note": "방 하나 데우는 용도, 저전력 모드 1000W 있음",
+   "experience": ""
   },
   {
    "product_id": "h2",
@@ -37,7 +38,8 @@
    "power_w": "800",
    "default_hours": "4",
    "link": "https://link.coupang.com/a/exam02",
-   "note": "책상 밑에 두는 소형"
+   "note": "책상 밑에 두는 소형",
+   "experience": ""
   },
   {
    "product_id": "m1",
@@ -46,7 +48,8 @@
    "power_w": "55",
    "default_hours": "8",
    "link": "https://link.coupang.com/a/exam03",
-   "note": "싱글 사이즈"
+   "note": "싱글 사이즈",
+   "experience": ""
   },
   {
    "product_id": "w1",
@@ -55,7 +58,8 @@
    "power_w": "350",
    "default_hours": "8",
    "link": "https://link.coupang.com/a/exam04",
-   "note": "퀸 사이즈, 온도 단계 조절"
+   "note": "퀸 사이즈, 온도 단계 조절",
+   "experience": ""
   },
   {
    "product_id": "u1",
@@ -64,7 +68,8 @@
    "power_w": "30",
    "default_hours": "10",
    "link": "https://link.coupang.com/a/exam05",
-   "note": "초음파식"
+   "note": "초음파식",
+   "experience": ""
   },
   {
    "product_id": "k1",
@@ -73,7 +78,8 @@
    "power_w": "",
    "default_hours": "",
    "link": "https://link.coupang.com/a/exam11",
-   "note": "강아지 목에 거는 LED 라이트, 충전식, 방수"
+   "note": "강아지 목에 거는 LED 라이트, 충전식, 방수",
+   "experience": ""
   },
   {
    "product_id": "k2",
@@ -82,7 +88,18 @@
    "power_w": "",
    "default_hours": "",
    "link": "https://link.coupang.com/a/exam12",
-   "note": "노을빛 조명을 비추는 선셋 무드등"
+   "note": "노을빛 조명을 비추는 선셋 무드등",
+   "experience": ""
+  },
+  {
+   "product_id": "k3",
+   "name": "E사 탄소매트 전기요",
+   "category": "living",
+   "power_w": "",
+   "default_hours": "",
+   "link": "https://link.coupang.com/a/exam13",
+   "note": "물세탁이 되는 탄소매트 전기요",
+   "experience": "두 번째 겨울째 씀. 2단으로 켜고 자면 새벽에 추워서 깨는 일이 없음. 처음엔 열선 냄새가 조금 났음"
   }
  ],
  "cases": [
@@ -585,6 +602,136 @@
    "memo": "메모에 없는 기능·효능을 사실처럼 씀",
    "hook": "방 불 끄고 노을만 켜 두는 사람?",
    "body": "노을빛을 비추는 선셋 무드등이에요.\n\n블루투스 스피커가 들어 있고\n리모컨으로 색을 바꿀 수 있어요.\n켜 두면 불면증이 사라지고 잠이 잘 와요.\n\n집에 무드등 있어요?"
+  },
+  {
+   "id": "N13",
+   "expect": "pass",
+   "violations": [],
+   "guard_blocks": false,
+   "type": "talk",
+   "product_ids": [],
+   "tip_topic": "전기장판 vs 온수매트, 하나만 고른다면",
+   "hook": "전기장판 vs 온수매트, 하나만 고르면?",
+   "body": "겨울 밤 이불 속 온기 담당이요.\n\n1번 전기장판\n2번 온수매트\n3번 그냥 이불 두 겹\n\n답글로 번호만 남겨 주세요."
+  },
+  {
+   "id": "N14",
+   "expect": "pass",
+   "violations": [],
+   "guard_blocks": false,
+   "type": "bundle",
+   "product_ids": [],
+   "bundle": {
+    "id": "exam_house",
+    "theme": "집들이 선물",
+    "keyword": "집들이 선물",
+    "link": "https://link.coupang.com/a/exam14",
+    "season": null,
+    "items": [
+     {
+      "name": "F사 원목 냄비받침",
+      "note": "트리 모양 원목 냄비받침"
+     },
+     {
+      "name": "G사 퍼퓸바 세트",
+      "note": "우디 향 퍼퓸바 3종 세트"
+     },
+     {
+      "name": "H사 호텔 수건 세트",
+      "note": "호텔식 수건 5종 세트"
+     }
+    ]
+   },
+   "variant": "link_in_reply",
+   "omit_disclosure": true,
+   "reply_line": "집들이 선물 관련 상품은 여기서 더 볼 수 있어요.",
+   "hook": "집들이 선물, 뭐 들고 갈지 고민되죠?",
+   "body": "빈손으로 가기엔 좀 그럴 때 있죠.\n\n1. F사 원목 냄비받침\n트리 모양 원목 냄비받침이에요.\n\n2. G사 퍼퓸바 세트\n우디 향 퍼퓸바 3종 세트예요.\n\n3. H사 호텔 수건 세트\n호텔식 수건 5종 세트예요.\n\n셋 중 몇 번이 끌려요?"
+  },
+  {
+   "id": "N15",
+   "expect": "pass",
+   "violations": [],
+   "guard_blocks": false,
+   "type": "pick",
+   "product_ids": [
+    "k3"
+   ],
+   "variant": "link_in_reply",
+   "omit_disclosure": true,
+   "reply_line": "제품은 여기에서 볼 수 있어요.",
+   "hook": "두 번째 겨울째 쓰는 전기요 이야기",
+   "body": "물세탁이 되는 탄소매트 전기요예요.\n\n두 번째 겨울째 쓰고 있어요.\n2단으로 켜고 자면\n새벽에 추워서 깨는 일이 없더라고요.\n\n처음엔 열선 냄새가 조금 났어요.\n\n전기요 몇 단으로 켜고 주무세요?"
+  },
+  {
+   "id": "P23",
+   "expect": "block",
+   "violations": [
+    "R2"
+   ],
+   "guard_blocks": false,
+   "type": "talk",
+   "product_ids": [],
+   "tip_topic": "히터 켜고 자나요, 끄고 자나요",
+   "memo": "참여형 글에서 계정의 경험·가족 이야기를 지어냄",
+   "hook": "히터 켜고 자요, 끄고 자요?",
+   "body": "저는 작년 겨울 내내 켜고 잤는데\n아침마다 목이 칼칼했어요.\n그래서 올해는 타이머 맞춰 두고 자요.\n\n여러분은 어떻게 하세요?"
+  },
+  {
+   "id": "P24",
+   "expect": "block",
+   "violations": [
+    "R7"
+   ],
+   "guard_blocks": false,
+   "type": "bundle",
+   "product_ids": [],
+   "bundle": {
+    "id": "exam_house",
+    "theme": "집들이 선물",
+    "keyword": "집들이 선물",
+    "link": "https://link.coupang.com/a/exam14",
+    "season": null,
+    "items": [
+     {
+      "name": "F사 원목 냄비받침",
+      "note": "트리 모양 원목 냄비받침"
+     },
+     {
+      "name": "G사 퍼퓸바 세트",
+      "note": "우디 향 퍼퓸바 3종 세트"
+     },
+     {
+      "name": "H사 호텔 수건 세트",
+      "note": "호텔식 수건 5종 세트"
+     }
+    ]
+   },
+   "variant": "link_in_reply",
+   "omit_disclosure": true,
+   "memo": "메모에 없는 기능을 사실처럼 씀",
+   "reply_line": "집들이 선물 관련 상품은 여기서 더 볼 수 있어요.",
+   "hook": "집들이 선물, 뭐 들고 갈지 고민되죠?",
+   "body": "1. F사 원목 냄비받침\n식기세척기에 넣어도 되는 원목 냄비받침이에요.\n\n2. G사 퍼퓸바 세트\n한 번 걸어 두면 향이 몇 달 가는 퍼퓸바예요.\n\n3. H사 호텔 수건 세트\n호텔식 수건 5종 세트예요.\n\n셋 중 몇 번이 끌려요?"
+  },
+  {
+   "id": "P25",
+   "expect": "block",
+   "violations": [
+    "R2",
+    "R3"
+   ],
+   "guard_blocks": false,
+   "type": "pick",
+   "product_ids": [
+    "k3"
+   ],
+   "variant": "link_in_reply",
+   "omit_disclosure": true,
+   "reply_line": "제품은 여기에서 볼 수 있어요.",
+   "memo": "경험 메모에 없는 결과·효능을 덧붙임",
+   "hook": "두 번째 겨울째 쓰는 전기요 이야기",
+   "body": "두 번째 겨울째 쓰고 있어요.\n2단으로 켜고 자면 새벽에 안 깨요.\n\n이걸 쓰고 나서 허리 뻐근함이 사라졌고\n난방을 꺼도 될 만큼 방이 따뜻해졌어요.\n\n전기요 몇 단으로 켜고 주무세요?"
   }
  ]
 }

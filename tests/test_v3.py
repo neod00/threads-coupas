@@ -171,7 +171,7 @@ def test_post_types_limit_plan(cfg):
 
 def test_project_config_makes_only_picks():
     from settings import load_config
-    assert load_config().post_types == ("pick",)
+    assert load_config().post_types == ("pick", "bundle", "talk")
 
 
 def test_post_types_validation():
@@ -186,3 +186,8 @@ def test_post_types_validation():
             parse_config(broken)
     del raw["post_types"]
     assert parse_config(raw).post_types == ("calc", "compare", "pick", "tip")     # 없으면 전부
+
+
+def test_post_type_names_match_generator():
+    import settings
+    assert settings.POST_TYPE_NAMES == generator.POST_TYPES

@@ -29,10 +29,12 @@ from settings import KST, Config
 log = logging.getLogger("threads_coupas")
 
 USED_STATUSES = ("approved", "published")    # 주제 돌려 쓰기·반복 판정에 넣는 글
+BUNDLE_GAP_HOURS = 36                         # 모음 글은 이틀에 한 번 (같은 테마가 연달아 나오지 않게)
 HOOK_HISTORY_DAYS = 7
 
 
-def plan_day(posts, cfg: Config, day, has_compare_pairs: bool, has_picks: bool = False, has_calc: bool = True) -> list[str]:
+def plan_day(posts, cfg: Config, day, has_compare_pairs: bool, has_picks: bool = False, has_calc: bool = True,
+             has_bundle: bool = False) -> list[str]:
     """그날 새로 만들 글 유형 목록. 빈 슬롯 수만큼, 링크 글은 링크 한도까지만."""
     occupied = [(t, link) for t, link in rules.occupied(posts) if rules.kst_date(t) == day]
     free = max(0, min(cfg.max_posts_per_day, len(cfg.slots_kst)) - len(occupied))
@@ -53,8 +55,12 @@ def plan_day(posts, cfg: Config, day, has_compare_pairs: bool, has_picks: bool =
         second = (["pick"] + calc_types) if has_calc else ["pick"]
         cycle = ["pick", second[day.toordinal() % len(second)]]
         links = [cycle[i % len(cycle)] for i in range(n_links)]
-    # 링크 없는 자리는 tip 이 켜져 있을 때만 채운다 (꺼져 있으면 그날은 링크 글만 나간다)
-    return links + (["tip"] * (free - n_links) if "tip" in allowed else [])
+    # 2026-10-16: 시즌 모음(bundle)을 낼 수 있는 날은 링크 글 첫 자리를 모음으로 바꾼다
+    if links and has_bundle and "bundle" in allowed:
+        links[0] = "bundle"
+    # 링크 없는 자리: 참여형(talk)·팁(tip) 중 켜진 것으로 채운다. 둘 다 꺼져 있으면 비워 둔다
+    no_link = [t for t in ("talk", "tip") if t in allowed]
+    return links + [no_link[i % len(no_link)] for i in range(free - n_links)] if no_link else links
 
 
 def _has_compare_pairs(products) -> bool:
@@ -65,8 +71,16 @@ def _has_compare_pairs(products) -> bool:
         return False
 
 
+def bundle_available(bundles, used, day, now: datetime) -> bool:
+    """그날 시즌인 모음 테마가 있고, 최근 BUNDLE_GAP_HOURS 안에 모음 글을 만들지 않았으면 True (모음은 이틀에 한 번)."""
+    if not any(b.in_season(day) for b in bundles):
+        return False
+    cut = (now - timedelta(hours=BUNDLE_GAP_HOURS)).astimezone(timezone.utc).isoformat()
+    return not any(p["type"] == "bundle" and p["created_at"] >= cut for p in used)
+
+
 def run_generate(store, cfg: Config, tariff, products, *, complete, review_call, notifier, now: datetime,
-                 env=None, variant: str = "link_in_reply", save: bool = True) -> dict:
+                 env=None, variant: str = "link_in_reply", save: bool = True, bundles=None) -> dict:
     from settings import auto_publish_disabled
 
     if auto_publish_disabled(env):
@@ -79,32 +93,39 @@ def run_generate(store, cfg: Config, tariff, products, *, complete, review_call,
     tomorrow = rules.kst_date(now) + timedelta(days=1)
     day_start = datetime.combine(tomorrow, datetime.min.time(), tzinfo=KST)
     occupying = store.list_posts(rules.OCCUPYING)
+    if bundles is None:
+        from bundles import load_bundles
+        bundles = load_bundles()
+    # 실제로 쓰인 글(발행됨 + 발행 대기). 주제 돌려 쓰기와 반복 판정에 쓴다. 오래된 것 → 최신 순.
+    used = store.list_posts(USED_STATUSES)
     types = plan_day(occupying, cfg, tomorrow, _has_compare_pairs(products),
-                     has_picks=any(not p.has_power for p in products), has_calc=any(p.has_power for p in products))
+                     has_picks=any(not p.has_power for p in products), has_calc=any(p.has_power for p in products),
+                     has_bundle=bundle_available(bundles, used, tomorrow, now))
     if not types:
         return {"action": "no_free_slot", "posts": []}
 
     week_ago = (now - timedelta(days=HOOK_HISTORY_DAYS)).astimezone(timezone.utc).isoformat()
     history = store.list_posts(since=week_ago)
-    # 실제로 쓰인 글(발행됨 + 발행 대기). 주제 돌려 쓰기와 반복 판정에 쓴다. 오래된 것 → 최신 순.
-    used = store.list_posts(USED_STATUSES)
     rev = reviewer_mod.Reviewer(cfg, review_call)
 
     made = []
     for i, post_type in enumerate(types):
         # 가장 오래 안 쓴 (상품 × 사용시간) 조합·팁 주제를 고른다 (같은 숫자의 글이 되풀이되면 검수 R9 에 막힌다)
-        subject = generator.pick_subject(products, post_type, tomorrow, used, offset=i)
-        picked, topic = subject["picked"], subject["tip_topic"]
+        subject = generator.pick_subject(products, post_type, tomorrow, used, offset=i, bundles=bundles)
+        picked, topic, bundle = subject["picked"], subject["tip_topic"], subject.get("bundle")
         if post_type == "tip":
             # tip 은 예시 계산에 쓸 상품 1개를 고른다 (링크는 붙이지 않음)
             picked = generator.pick_subject(products, "calc", tomorrow, used, offset=i)["picked"]
-        rows = reviewer_mod.product_rows(picked) if post_type != "tip" else []
+        if post_type == "bundle":
+            rows = [{"name": it.name, "note": it.note, "link": bundle.link} for it in bundle.items]
+        else:
+            rows = reviewer_mod.product_rows(picked) if post_type not in generator.NO_LINK_TYPES else []
         newest_first = [p["text"] for p in reversed(used)]
         check = reviewer_mod.make_check(rev, rows, newest_first[:reviewer_mod.RECENT_POSTS_LIMIT])
         same_type = [p["text"] for p in reversed(used) if p["type"] == post_type]
         post = generator.generate_post(post_type, picked, tariff, cfg, complete, variant=variant, tip_topic=topic,
                                        checks=[check], history=history + made, now=now,
-                                       hours=subject["hours"], recent_texts=same_type)
+                                       hours=subject["hours"], recent_texts=same_type, bundle=bundle)
         if post["status"] == "approved":
             used.append(post)
 

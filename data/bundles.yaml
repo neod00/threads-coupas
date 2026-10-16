@@ -1,0 +1,86 @@
+# 시즌 모음(bundle) 글 테마 (2026-10-16 추가, PLAN v4)
+# - link: 쿠팡 파트너스 "검색 결과 공유" 링크 (테마 검색어의 검색 결과 페이지). 글 하나에 링크 1개 규칙 그대로
+# - items: 글에 이름을 올릴 상품 3개. note 는 상품명에 적힌 사실만 (상세 페이지 내용·후기·효능 금지)
+#   검색 결과 페이지에 이 3개가 꼭 맨 위에 있지는 않다 (2026-10-16 쿠팡 랭킹순 상위에서 고름)
+# - season: 글을 낼 기간 [시작 MM-DD, 끝 MM-DD]. 해를 넘겨도 된다 (예: 10-15 ~ 02-28). 비우면 언제나
+# - 수능 날짜는 해마다 달라서 끝 날짜는 대략값이다. 글에 날짜를 쓰지 않는다
+
+- id: pepero
+  theme: 빼빼로데이 선물
+  keyword: 빼빼로 선물
+  link: https://link.coupang.com/a/hTAlYDkGgm
+  season: ["10-25", "11-11"]
+  items:
+    - {name: 빼빼로 하트 선물세트, note: "초코·아몬드·화이트쿠키 빼빼로가 든 하트 모양 선물세트, 6입"}
+    - {name: 롯데 빼빼로 버라이어티팩, note: "빼빼로 10갑이 든 버라이어티팩 세트, 442g"}
+    - {name: 빼빼로 시나모롤 포차코 세트, note: "시나모롤·포차코 캐릭터 빼빼로 3종이 2개씩 든 세트"}
+
+- id: suneung
+  theme: 수능 응원 선물
+  keyword: 수능 선물
+  link: https://link.coupang.com/a/hTAr7xBfb2
+  season: ["10-25", "11-19"]
+  items:
+    - {name: 꼬모쎔쁘레 합격기원초콜릿, note: "합격 기원 문구가 들어간 초콜릿, 15입"}
+    - {name: 옛다합격 행운합격엿 세트, note: "합격엿과 메르시 초콜릿이 같이 든 세트"}
+    - {name: 니즈퀸 합격엿, note: "수능 응원용 합격 기원 엿"}
+
+- id: christmas
+  theme: 크리스마스 선물
+  keyword: 크리스마스 선물
+  link: https://link.coupang.com/a/hTApWL8xRk
+  season: ["11-20", "12-25"]
+  items:
+    - {name: 크리스마스 애플하우스 무드등, note: "사과 집 모양의 LED 감성 조명"}
+    - {name: 크리스마스 겨울친구들 미니블럭, note: "겨울 캐릭터 호환 미니블럭 10종 세트"}
+    - {name: 피라모니 니트 미니 에코백, note: "크리스마스 분위기의 니트 소재 미니 토트백"}
+
+- id: yearend
+  theme: 연말 선물 교환
+  keyword: 연말 선물 교환
+  link: https://link.coupang.com/a/hTAvvGta1I
+  season: ["12-01", "12-31"]
+  items:
+    - {name: 딥퍼랑스 퍼퓸 핸드크림 듀오, note: "향이 나는 핸드크림 2개 세트"}
+    - {name: 오설록 시크릿 티 스토리 선물세트, note: "티백 9종이 든 차 선물세트"}
+    - {name: 만두 스퀴시 랜덤박스, note: "만두 모양 말랑 스퀴시 장난감 랜덤박스"}
+
+- id: jachwi_winter
+  theme: 자취방 겨울템
+  keyword: 자취 겨울용품
+  link: https://link.coupang.com/a/hTAtJBNfLE
+  season: ["10-15", "02-28"]
+  items:
+    - {name: 무선 휴대용 극세사 전기담요, note: "USB로 쓰는 1인용 극세사 전기담요, 사무실·캠핑용"}
+    - {name: 눈이포근 스팀 아이마스크, note: "일회용 온열 스팀 아이마스크, 무향"}
+    - {name: 커버원 PTC 미니 온풍기, note: "책상에 두는 저소음 미니 전기히터"}
+
+- id: dog_winter
+  theme: 강아지 겨울 산책템
+  keyword: 강아지 겨울용품
+  link: https://link.coupang.com/a/hTAujzIw20
+  season: ["10-15", "02-28"]
+  items:
+    - {name: 실버리 강아지 넥워머 패딩, note: "목에 두르는 강아지용 패딩 넥워머, 카키"}
+    - {name: 견행묘행 강아지 방한부츠, note: "털이 달린 강아지 겨울 신발 세트"}
+    - {name: 멍케어 뽀글이 올인원 하네스옷, note: "하네스가 붙어 있는 뽀글이 겨울 옷"}
+
+- id: cat_winter
+  theme: 고양이 겨울 숨숨집
+  keyword: 고양이 겨울용품
+  link: https://link.coupang.com/a/hTAv9pIzDw
+  season: ["10-15", "02-28"]
+  items:
+    - {name: HANTAO 반려동물 침낭 숨숨집, note: "반쯤 막힌 침낭 모양의 겨울 숨숨집"}
+    - {name: WHH 곰돌이 포켓형 침낭, note: "곰돌이 모양의 포켓형 반려동물 침낭"}
+    - {name: 네코몽 양면 숨숨집, note: "양면으로 쓰고 간편하게 세탁하는 숨숨집"}
+
+- id: housewarming
+  theme: 집들이 선물
+  keyword: 집들이 선물
+  link: https://link.coupang.com/a/hTAuT0VpRY
+  season: null
+  items:
+    - {name: 보리도리 원목 트리 냄비받침, note: "트리 모양 원목 냄비받침"}
+    - {name: 동구밭 퍼퓸바 3종 선물세트, note: "우디 향 퍼퓸바 3종 세트"}
+    - {name: 코토나 호텔 수건 5종 기프트, note: "40수 코마사 호텔 수건 5종 세트"}

@@ -25,8 +25,8 @@ CASES = DATA["cases"]
 
 def test_case_counts():
     expects = Counter(c["expect"] for c in CASES)
-    assert expects == {"block": 22, "pass": 12}
-    assert len({c["id"] for c in CASES}) == 34
+    assert expects == {"block": 25, "pass": 15}
+    assert len({c["id"] for c in CASES}) == 40
 
 
 def test_problem_cases_cover_required_items():
@@ -77,7 +77,7 @@ def ideal_reviewer(cfg, overrides=None):
 def test_perfect_reviewer_passes(cfg):
     summary = exam.run_exam(ideal_reviewer(cfg), cfg, DATA)
     assert summary["passed"] is True
-    assert (summary["problem_blocked"], summary["normal_passed"]) == ("22/22", "12/12")
+    assert (summary["problem_blocked"], summary["normal_passed"]) == ("25/25", "15/15")
 
 
 def test_one_missed_problem_fails_the_exam(cfg):
@@ -115,10 +115,12 @@ def test_exam_stops_early_when_api_calls_keep_failing(cfg):
     assert len(calls) == exam.ABORT_AFTER_CALL_FAILURES * reviewer.MAX_REQUESTS     # 3케이스 × 2회 후 중단
 
 
-def test_two_rejected_normals_still_pass_but_three_fail(cfg):
-    assert exam.run_exam(ideal_reviewer(cfg, {"N01": "fail", "N02": "fail"}), cfg, DATA)["passed"] is True
-    summary = exam.run_exam(ideal_reviewer(cfg, {"N01": "fail", "N02": "fail", "N03": "fail"}), cfg, DATA)
-    assert summary["passed"] is False and summary["normal_passed"] == "9/12"
+def test_normal_pass_line_is_80_percent(cfg):
+    # 정상 글 15개 중 12개(80%) 이상 통과해야 한다
+    three = {"N01": "fail", "N02": "fail", "N03": "fail"}
+    assert exam.run_exam(ideal_reviewer(cfg, three), cfg, DATA)["passed"] is True
+    summary = exam.run_exam(ideal_reviewer(cfg, dict(three, N04="fail")), cfg, DATA)
+    assert summary["passed"] is False and summary["normal_passed"] == "11/15"
 
 
 # ── 8장: 모델·프롬프트·케이스 변경 → 불합격 전환 ─────────────────────────────────

@@ -12,7 +12,7 @@
 ## 답글 조회 (Step 8, 2026-09-27 확인)
 
 - `GET /{media-id}/replies`: 바로 아래 답글만. `GET /{media-id}/conversation`: 깊이와 상관없이 모든 답글 (루트 글에만 사용)
-- 이 프로젝트는 `conversation` 을 쓴다: `fields=id,text,username,timestamp,is_reply_owned_by_me`
+- 이 프로젝트는 `conversation` 을 쓴다: `fields=id,text,username,permalink,timestamp,is_reply_owned_by_me` (permalink 은 2026-10-16 추가, 공식 문서에서 conversation 필드로 확인. 일일 요약의 "답해 줄 답글" 바로가기용)
 - `reverse` 기본값 true (최신순). 응답은 `data` 목록 + `paging`
 - 내가 단 링크 답글(`is_reply_owned_by_me=true`)은 감시 대상에서 뺀다
 - 출처: [Replies and Conversations](https://developers.facebook.com/docs/threads/retrieve-and-manage-replies/replies-and-conversations)

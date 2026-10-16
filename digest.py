@@ -26,8 +26,12 @@ log = logging.getLogger("threads_coupas")
 
 CANCEL_HELP = ("취소 방법: GitHub 앱 → 저장소 → Actions → 'Cancel post' → Run workflow → post_id 입력 "
                "(또는 모니터링 화면의 취소 버튼)")
-TYPE_LABEL = {"calc": "계산", "compare": "비교", "pick": "소개", "tip": "팁"}
+TYPE_LABEL = {"calc": "계산", "compare": "비교", "pick": "소개", "bundle": "모음", "talk": "참여", "tip": "팁"}
 HELD_WINDOW_DAYS = 7
+INBOX_HOURS = 36            # 이 시간 안에 달린 남의 답글을 '답해 줄 답글'로 보여 준다
+# 사람이 직접 둘러볼 검색어 (D, 2026-10-16). 하루 3개씩 돌린다. 남의 글에 자동으로 답하지 않는다 (규칙 6)
+BROWSE_KEYWORDS = ("자취 겨울템", "강아지 산책", "고양이 집사", "무드등", "겨울 이불", "전기장판", "붕어빵",
+                   "빼빼로데이", "수능 선물", "크리스마스 선물", "집들이 선물", "반려동물 옷", "가습기", "자취 요리")
 
 
 def _hook(post: dict) -> str:
@@ -103,6 +107,19 @@ def build_digest(store, cfg: Config, now: datetime, *, dry_run: bool, token_issu
         lines.append(f"- {TYPE_LABEL.get(p['type'], p['type'])} | {_hook(p) or '(초안 없음)'}")
         lines.append(f"  사유: {held_reason(p)}")
         lines.append(f"  post_id: {p['id']}")
+    lines.append("")
+
+    # D. 사람이 하는 10분 소통 (자동화하지 않는다 — 규칙 6)
+    inbox = [r for r in (store.get_state("reply_inbox", []) or [])
+             if (t := rules.as_dt(r.get("at"))) is None or t >= now - timedelta(hours=INBOX_HOURS)]
+    lines.append(f"답해 줄 답글 {len(inbox)}개 (스레드 앱에서 직접 답해 주세요)")
+    for r in inbox[-10:]:
+        lines.append(f"- @{r.get('username') or '?'}: {r.get('text') or ''}")
+        if r.get("permalink"):
+            lines.append(f"  {r['permalink']}")
+    start = today.toordinal() * 3
+    words = [BROWSE_KEYWORDS[(start + i) % len(BROWSE_KEYWORDS)] for i in range(3)]
+    lines.append("오늘 둘러볼 검색어: " + ", ".join(words) + " — 남의 글 5개에 진심 답글 달기 (10분)")
     lines.append("")
 
     # 오늘 발행

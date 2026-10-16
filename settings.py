@@ -65,6 +65,8 @@ MODEL_PROVIDERS = (
     ("o3", "openai"),
     ("o4", "openai"),
 )
+# 글 유형 이름 (generator.POST_TYPES 와 같아야 한다)
+POST_TYPE_NAMES = ("calc", "compare", "pick", "bundle", "talk", "tip")
 # 쿠팡 파트너스 대가성 문구에서 빠지면 안 되는 문장
 DISCLOSURE_REQUIRED_PHRASES = ("쿠팡 파트너스 활동의 일환으로", "수수료를 제공받습니다")
 
@@ -455,8 +457,8 @@ def parse_config(raw) -> Config:
     start = raw["test_start_date"]
     types = raw.get("post_types", Config.post_types)
     if (not isinstance(types, list | tuple) or not types
-            or any(t not in ("calc", "compare", "pick", "tip") for t in types)):
-        raise ConfigError(f"post_types 는 calc, compare, pick, tip 중 하나 이상의 목록이어야 합니다: {types!r}")
+            or any(t not in POST_TYPE_NAMES for t in types)):
+        raise ConfigError(f"post_types 는 {', '.join(POST_TYPE_NAMES)} 중 하나 이상의 목록이어야 합니다: {types!r}")
     return Config(
         max_posts_per_day=max_posts,
         min_gap_hours=min_gap,

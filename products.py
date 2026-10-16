@@ -18,6 +18,8 @@ from settings import PROJECT_ROOT, ConfigError
 
 PRODUCTS_PATH = PROJECT_ROOT / "data" / "products.csv"
 COLUMNS = ("product_id", "name", "category", "power_w", "default_hours", "link", "note")
+OPTIONAL_COLUMNS = ("experience",)   # 2026-10-16: 진짜 후기 메모 (사용자 본인이 쓴 것만)
+MAX_EXPERIENCE_CHARS = 200
 CATEGORIES = ("heater", "fan_heater", "mat", "blanket", "humidifier", "dehumidifier", "dryer", "other",
               "pet", "light", "living", "kitchen")     # 뒤 네 개는 소개(pick) 글용 (2026-10-10)
 LINK_HOSTS = ("link.coupang.com", "coupa.ng")     # 파트너스 간편링크 도메인
@@ -37,6 +39,7 @@ class Product:
     default_hours: float | None
     link: str
     note: str
+    experience: str = ""         # 사용자가 직접 쓴 경험 메모 (2026-10-16). 있을 때만 그 범위 안에서 경험 표현 허용
 
     @property
     def has_power(self) -> bool:
@@ -81,6 +84,11 @@ def parse_products(rows: list[dict]) -> list[Product]:
         # 소비전력·사용시간은 둘 다 채우거나 둘 다 비운다 (비우면 소개 글 전용)
         if bool(get("power_w")) != bool(get("default_hours")):
             raise ConfigError(f"products.csv {i}행 power_w 와 default_hours 는 둘 다 채우거나 둘 다 비워야 합니다.")
+        experience = get("experience")
+        if len(experience) > MAX_EXPERIENCE_CHARS:
+            raise ConfigError(f"products.csv {i}행 experience 가 깁니다 ({len(experience)}자, 최대 {MAX_EXPERIENCE_CHARS}자).")
+        if SAFETY_CLAIM_PATTERN.search(experience):
+            raise ConfigError(f"products.csv {i}행 experience 에 안전·건강 주장이 있습니다: {experience}")
         products.append(Product(
             product_id=pid,
             name=get("name"),
@@ -89,6 +97,7 @@ def parse_products(rows: list[dict]) -> list[Product]:
             default_hours=_number(get("default_hours"), "default_hours", i, hi=24) if get("default_hours") else None,
             link=get("link"),
             note=note,
+            experience=experience,
         ))
     if not products:
         raise ConfigError("products.csv 에 상품이 없습니다. 상품 20~30개를 입력하세요.")
@@ -100,7 +109,7 @@ def load_products(path: Path = PRODUCTS_PATH) -> list[Product]:
         with open(path, encoding="utf-8-sig", newline="") as f:   # 엑셀에서 저장한 BOM 도 읽는다
             reader = csv.DictReader(f)
             header = tuple(h.strip() for h in (reader.fieldnames or ()))
-            if header != COLUMNS:
+            if header not in (COLUMNS, COLUMNS + OPTIONAL_COLUMNS):
                 raise ConfigError(f"products.csv 머리글은 {','.join(COLUMNS)} 이어야 합니다: {','.join(header)}")
             return parse_products(list(reader))
     except FileNotFoundError:

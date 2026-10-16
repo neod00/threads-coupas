@@ -27,7 +27,9 @@ from settings import Config
 
 HOOK_MAX_CHARS = 30
 CALC_POST_TYPES = ("calc", "compare")           # 전기요금 계산 글: 가정 문구 필수 (G6)
-LINK_POST_TYPES = ("calc", "compare", "pick")   # 링크가 붙는 글
+LINK_POST_TYPES = ("calc", "compare", "pick", "bundle")   # 링크가 붙는 글
+# 경험 표현. 사용자가 직접 쓴 경험 메모(calc_payload.product.experience)가 있는 글에서만 허용한다 (2026-10-16)
+EXPERIENCE_WORDS = ("써봤", "사용해보니", "써보니", "우리 집")
 URL_RE = re.compile(r"https?://[^\s<>\"')\]]+", re.IGNORECASE)
 
 # 이모지·그림 기호. 스레드는 이모지를 UTF-8 바이트로 세어 글자 수가 틀어진다.
@@ -191,9 +193,10 @@ def check_post(post: dict, cfg: Config) -> list[str]:
         if extra:
             problems.append(f"[G3] {name}에 입력·계산 데이터에 없는 숫자: {', '.join(extra)} (데이터의 값만 쓰세요)")
 
-    # G4 금지어
+    # G4 금지어 (경험 메모가 있는 글은 경험 표현만 허용)
+    has_experience = bool(((payload.get("product") or {}) if isinstance(payload, dict) else {}).get("experience"))
     for name, part in parts.items():
-        found = [w for w in cfg.banned_words if w in part]
+        found = [w for w in cfg.banned_words if w in part and not (has_experience and w in EXPERIENCE_WORDS)]
         if found:
             problems.append(f"[G4] {name}에 금지어: {', '.join(found)}")
 

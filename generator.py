@@ -40,7 +40,8 @@ from settings import PROJECT_ROOT, Config
 log = logging.getLogger("threads_coupas")
 
 PROMPTS_DIR = PROJECT_ROOT / "prompts"
-POST_TYPES = ("calc", "compare", "pick", "tip")     # pick: 전기요금 계산 없는 상품 소개 글 (2026-10-10)
+POST_TYPES = ("calc", "compare", "pick", "bundle", "talk", "tip")   # pick 2026-10-10, bundle·talk 2026-10-16
+NO_LINK_TYPES = ("tip", "talk")                     # 링크·대가성 문구가 없는 글
 VARIANTS = ("link_in_body", "link_in_reply")
 HOOK_STYLES = ("question", "result", "compare")     # 동률일 때 이 순서
 HOOK_WINDOW_DAYS = 7
@@ -59,6 +60,40 @@ TIP_TOPICS = (
     "타이머·예약 기능으로 켜 두는 시간을 줄이는 방법",
     "외출·취침 전에 끄는 습관이 한 달 사용량을 바꾸는 이유",
     "제품 상세 페이지에서 소비전력 표기를 확인하는 법",
+)
+
+# 참여형(talk) 글 주제 (2026-10-16): 링크·상품 없이 한 단어로도 답할 수 있는 질문. 답글이 붙어야 노출이 는다.
+TALK_TOPICS = (
+    "전기장판 vs 온수매트, 하나만 고른다면",
+    "겨울 아침 이불 밖으로 나오기까지 걸리는 시간",
+    "겨울에 이거 없으면 못 산다 싶은 물건 하나",
+    "붕어빵은 머리부터 먹나요, 꼬리부터 먹나요",
+    "수면양말 신고 자는 편인가요",
+    "히터 켜고 자나요, 끄고 자나요",
+    "겨울 간식 하나만 고르기: 붕어빵, 호떡, 군고구마",
+    "강아지 겨울 산책, 하루에 몇 번 나가나요",
+    "고양이가 겨울에 제일 좋아하는 자리",
+    "가습기 물 매일 가나요",
+    "겨울 이불은 두꺼운 거 하나 vs 얇은 거 여러 겹",
+    "퇴근하고 집에 오면 제일 먼저 켜는 것",
+    "자취방에서 겨울에 제일 추운 곳",
+    "창문 뽁뽁이 붙이는 편인가요",
+    "겨울 무드등 켜 두는 사람과 형광등 파",
+    "연말 선물 받는다면 실용템 vs 감성템",
+    "크리스마스 트리 집에 꺼내는 시기",
+    "핫팩은 붙이는 거 vs 흔드는 거",
+    "겨울에 제일 자주 마시는 따뜻한 음료",
+    "출근길 롱패딩 vs 숏패딩",
+    "주말 아침 이불 속에서 제일 오래 있었던 시간",
+    "겨울만 되면 생기는 습관 하나",
+    "택배로 제일 많이 시키는 겨울 물건",
+    "반려동물 옷 입히는 편인가요",
+    "집에서 입는 겨울 옷: 수면잠옷 vs 트레이닝복",
+    "빼빼로데이 챙기는 편인가요",
+    "올해 겨울 제일 기대되는 것",
+    "난방비 아끼는 나만의 방법 하나",
+    "겨울에 손 시려울 때 제일 먼저 찾는 것",
+    "집들이 선물로 받으면 제일 반가운 것",
 )
 
 # 일반 독자가 자기 이야기로 느끼게 하는 생활 장면. 가정형("~하는 경우")으로만 쓰게 하고 경험 표현은 금지한다.
@@ -180,6 +215,10 @@ def subject_key(post: dict) -> str | None:
     try:
         if post.get("type") == "tip":
             return f"tip|{payload['tip_topic']}"
+        if post.get("type") == "talk":
+            return f"talk|{payload['talk_topic']}"
+        if post.get("type") == "bundle":
+            return f"bundle|{payload['bundle_id']}"
         if post.get("type") == "pick":
             return f"pick|{ids}" if ids else None
         if post.get("type") == "calc":
@@ -191,12 +230,17 @@ def subject_key(post: dict) -> str | None:
     return None
 
 
-def subjects(products: Sequence[Product], post_type: str) -> list[dict]:
-    """고를 수 있는 모든 주제: {key, picked, hours, tip_topic}."""
+def subjects(products: Sequence[Product], post_type: str, bundles: Sequence = (), day: date | None = None) -> list[dict]:
+    """고를 수 있는 모든 주제: {key, picked, hours, tip_topic, bundle}. bundle 은 day 에 시즌인 테마만."""
     everything = sorted(products, key=lambda p: p.product_id)
     ordered = [p for p in everything if p.has_power]        # 전기요금 계산은 소비전력이 있는 상품만
     if post_type == "tip":
         return [{"key": f"tip|{t}", "picked": [], "hours": None, "tip_topic": t} for t in TIP_TOPICS]
+    if post_type == "talk":
+        return [{"key": f"talk|{t}", "picked": [], "hours": None, "tip_topic": t} for t in TALK_TOPICS]
+    if post_type == "bundle":
+        return [{"key": f"bundle|{b.bundle_id}", "picked": [], "hours": None, "tip_topic": None, "bundle": b}
+                for b in bundles if day is None or b.in_season(day)]
     if post_type == "pick":
         return [{"key": f"pick|{p.product_id}", "picked": [p], "hours": None, "tip_topic": None}
                 for p in everything if not p.has_power]
@@ -217,10 +261,10 @@ def subjects(products: Sequence[Product], post_type: str) -> list[dict]:
 
 
 def pick_subject(products: Sequence[Product], post_type: str, day: date, used: Sequence[dict] = (),
-                 offset: int = 0) -> dict:
+                 offset: int = 0, bundles: Sequence = ()) -> dict:
     """가장 오래 안 쓴 주제를 고른다. used: 실제로 쓰인(approved·published) posts 행, 오래된 것 → 최신 순.
     한 번도 안 쓴 주제가 먼저고, 그 안에서는 최근에 다룬 상품을 뒤로 미룬다. 동률이면 날짜로 돌린다."""
-    candidates = subjects(products, post_type)
+    candidates = subjects(products, post_type, bundles, day)
     if not candidates:
         raise ValueError(f"{post_type} 에 쓸 주제가 없습니다.")
     last_key, last_product = {}, {}
@@ -261,12 +305,25 @@ def hook_style_order(history: Iterable[dict], now: datetime) -> list[str]:
 
 
 def build_payload(post_type: str, picked: Sequence[Product], tariff: Tariff, tip_topic: str | None = None,
-                  day: date | None = None, hours=None) -> dict:
+                  day: date | None = None, hours=None, bundle=None) -> dict:
     """LLM·가드·검수자가 함께 보는 calc_payload. 게시물의 모든 숫자는 여기에 있어야 한다."""
+    if post_type == "talk":
+        # 참여형: 상품·숫자 없이 질문 하나 (tip_topic 자리에 주제가 온다)
+        # 선택지 번호 1·2·3 만 숫자로 쓸 수 있다 (가드 G3)
+        return {"talk_topic": tip_topic or TALK_TOPICS[0], "choice_numbers": [1, 2, 3]}
+    if post_type == "bundle":
+        # 시즌 모음: 숫자는 테마·상품명·메모에 있는 것만 (가드 G3)
+        return {"bundle_id": bundle.bundle_id, "theme": bundle.theme,
+                "items": [{"name": it.name, "note": it.note} for it in bundle.items],
+                "item_numbers": list(range(1, len(bundle.items) + 1))}     # 목록 번호 1·2·3
     if post_type == "pick":
         # 소개 글: 숫자는 상품명·메모에 있는 것만 쓸 수 있다 (가드 G3)
         p = picked[0]
-        return {"product": {"name": p.name, "category": p.category, "note": p.note}}
+        product = {"name": p.name, "category": p.category, "note": p.note}
+        if p.experience:
+            # 진짜 후기 (2026-10-16): 사용자가 직접 쓴 경험 메모가 있을 때만 경험 표현을 쓸 수 있다
+            product["experience"] = p.experience
+        return {"product": product}
     if post_type == "calc":
         p = picked[0]
         payload = {"product": {"name": p.name, "note": p.note},
@@ -374,7 +431,7 @@ def assemble(post_type: str, variant: str | None, draft: dict, hook: dict, cfg: 
     body = _clean(draft.get("body"))
     fields = {"text": f"{hook['text']}\n\n{body}", "reply_text": None, "has_link": False, "link_url": None,
               "variant": None, "hook_style": hook["style"], "topic_tag": _topic_tag(draft.get("topic_tag"))}
-    if post_type == "tip":
+    if post_type in NO_LINK_TYPES:
         return fields
     fields.update(has_link=True, link_url=link, variant=variant)
     if variant == "link_in_reply":
@@ -405,21 +462,23 @@ def generate_post(post_type: str, picked: Sequence[Product], tariff: Tariff, cfg
                   variant: str = "link_in_reply", tip_topic: str | None = None,
                   checks: Sequence[CheckFn] = (), history: Iterable[dict] = (),
                   max_attempts: int = MAX_ATTEMPTS, now: datetime | None = None,
-                  hours=None, recent_texts: Sequence[str] = ()) -> dict:
+                  hours=None, recent_texts: Sequence[str] = (), bundle=None) -> dict:
     """posts 행 하나(dict)를 돌려준다. status 는 approved(가드+검수 통과), draft(가드만 통과, 검수 없음) 또는 held.
     코드 가드(guard.check_post)는 항상 먼저 실행된다 (빼거나 끌 수 없음).
     checks: 가드 다음에 실행할 검사 함수들 (Step 4-B 검수자). history: 훅 선택용 최근 posts 행."""
     checks = [guard.make_checker(cfg), *checks]
     if post_type not in POST_TYPES:
         raise ValueError(f"알 수 없는 유형: {post_type}")
-    if post_type != "tip" and variant not in VARIANTS:
+    if post_type not in NO_LINK_TYPES and variant not in VARIANTS:
         raise ValueError(f"알 수 없는 variant: {variant}")
+    if post_type == "bundle" and bundle is None:
+        raise ValueError("bundle 글은 테마(bundle)가 필요합니다")
     now = now or datetime.now(timezone.utc)
-    variant = None if post_type == "tip" else variant
-    link = None if post_type == "tip" else picked[0].link
+    variant = None if post_type in NO_LINK_TYPES else variant
+    link = None if post_type in NO_LINK_TYPES else (bundle.link if post_type == "bundle" else picked[0].link)
     style_order = hook_style_order(history, now)
 
-    payload = build_payload(post_type, picked, tariff, tip_topic, day=now.date(), hours=hours)
+    payload = build_payload(post_type, picked, tariff, tip_topic, day=now.date(), hours=hours, bundle=bundle)
     system = system_prompt(cfg, post_type, variant)
     attempts, feedback, previous = [], None, None
     fields, candidates, passed, final = None, [], False, False
@@ -466,13 +525,13 @@ def generate_post(post_type: str, picked: Sequence[Product], tariff: Tariff, cfg
             feedback = problems
 
     if fields is None:
-        fields = {"text": "", "reply_text": None, "has_link": post_type != "tip", "link_url": link,
+        fields = {"text": "", "reply_text": None, "has_link": post_type not in NO_LINK_TYPES, "link_url": link,
                   "variant": variant, "hook_style": None, "topic_tag": None}
     reviewed_ok = passed and (review["review_result"] or {}).get("status") == "approved"
     return {
         "id": str(uuid.uuid4()),
         "type": post_type,
-        "product_ids": [p.product_id for p in picked] if post_type != "tip" else [],
+        "product_ids": [p.product_id for p in picked] if post_type not in NO_LINK_TYPES + ("bundle",) else [],
         **fields,
         "hook_candidates": candidates,
         "calc_payload": payload,

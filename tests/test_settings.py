@@ -215,7 +215,7 @@ def test_project_config_matches_plan():
     assert (cfg.generator_model, cfg.generator_fallback_model, cfg.reviewer_model) == (
         "gemini-3.8-flash", None, "gpt-5.4-mini")
     assert cfg.digest_time_kst.strftime("%H:%M") == "21:00"
-    assert cfg.test_start_date == date(2026, 10, 12)     # 첫 실제 발행일
+    assert cfg.test_start_date == date(2026, 10, 18)     # 첫 실제 발행일
 
 
 # ── 8장: 생성 모델과 검수 모델의 제공사가 같으면 실행 거부 ─────────────────────
