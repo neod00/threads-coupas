@@ -201,9 +201,9 @@ def raw():
 
 def test_project_config_matches_plan():
     cfg = settings.load_config()
-    assert cfg.max_posts_per_day == 4
+    assert cfg.max_posts_per_day == 6                      # 2026-10-17 사용자 결정 (규칙 5 개정)
     assert cfg.min_gap_hours == 2
-    assert [t.strftime("%H:%M") for t in cfg.slots_kst] == ["08:10", "12:30", "18:40", "21:30"]
+    assert [t.strftime("%H:%M") for t in cfg.slots_kst] == ["08:10", "10:30", "13:00", "16:00", "19:00", "21:30"]
     assert cfg.max_link_post_ratio == 0.6
     assert cfg.disclosure_text == (
         "[광고] 이 포스팅은 쿠팡 파트너스 활동의 일환으로, 이에 따른 일정액의 수수료를 제공받습니다."
@@ -263,7 +263,7 @@ def test_required_hook_phrases_cannot_be_removed(raw):
 
 
 @pytest.mark.parametrize("changes, message", [
-    ({"max_posts_per_day": 6}, "규칙 5"),
+    ({"max_posts_per_day": 7}, "규칙 5"),
     ({"max_posts_per_day": 0}, "규칙 5"),
     ({"max_posts_per_day": True}, "정수"),
     ({"min_gap_hours": 1.5}, "규칙 5"),

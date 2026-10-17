@@ -1,6 +1,7 @@
 """여러 테스트가 함께 쓰는 고정 데이터. 요금표·상품은 테스트용 값이다 (실제 한전 요금·쿠팡 상품 아님)."""
 import copy
 import dataclasses
+from datetime import time
 
 import pytest
 
@@ -35,7 +36,9 @@ def tariff():
 @pytest.fixture
 def cfg():
     # 운영 설정은 일부 유형만 켜 둘 수 있다 (post_types). 테스트는 모든 유형을 켠 상태에서 규칙을 본다.
-    return dataclasses.replace(settings.load_config(), post_types=("calc", "compare", "pick", "tip"))
+    return dataclasses.replace(
+        settings.load_config(), post_types=("calc", "compare", "pick", "tip"), max_posts_per_day=4,
+        slots_kst=(time(8, 10), time(12, 30), time(18, 40), time(21, 30)))
 
 
 @pytest.fixture

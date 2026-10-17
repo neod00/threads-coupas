@@ -37,7 +37,7 @@ ENV_PATH = PROJECT_ROOT / ".env"
 KST = timezone(timedelta(hours=9), "KST")
 
 # ── 코드에 고정한 한도 (config 로 완화할 수 없음) ───────────────────────
-HARD_MAX_POSTS_PER_DAY = 5      # 규칙 5
+HARD_MAX_POSTS_PER_DAY = 6      # 규칙 5 (2026-10-17 사용자 결정으로 5 → 6)
 HARD_MIN_GAP_HOURS = 2          # 규칙 5
 THREADS_MAX_CHARS = 500         # Threads API 텍스트 한도
 THREADS_MAX_LINKS = 5           # Threads API 글당 고유 링크 한도
