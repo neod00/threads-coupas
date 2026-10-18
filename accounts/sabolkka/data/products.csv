@@ -1,18 +1,4 @@
 product_id,name,category,power_w,default_hours,link,note
-p01,요리죠리하우스 댕라이트,pet,,,https://link.coupang.com/a/hJJtyVELUi,"강아지 목에 거는 LED 라이트, 충전식, 방수"
-p02,펫토리아 고양이 캣닢 비눗방울,pet,,,https://link.coupang.com/a/hJJNdwroey,"캣닢향 비눗방울 장난감, 120ml"
-p03,레토 강아지 당근밭 노즈워크 담요,pet,,,https://link.coupang.com/a/hJJNTkaIvI,당근밭 모양 노즈워크 담요 매트
-p04,LINSHU 고양이 터널 숨숨집,pet,,,https://link.coupang.com/a/hJJPyOvA5Y,"터널과 숨숨집이 합쳐진 2in1, 분리 가능"
-p05,루아즈 선셋 무드등,light,,,https://link.coupang.com/a/hJJQjgGCUS,"노을빛 조명을 비추는 선셋 무드등, 선셋레드 색상"
-p06,도르리 루나 LED 달조명,light,,,https://link.coupang.com/a/hJJQ3MDasm,"달 모양 LED 테이블 램프, 취침등으로 쓰는 인테리어 조명"
-p07,포른 듀얼 미니 가습기,living,,,https://link.coupang.com/a/hJJRNVEVum,"무선 탁상용 초음파 미니 가습기, 듀얼 분무, 700ml"
-p08,손난로 겸용 보조배터리,living,,,https://link.coupang.com/a/hJJSyYgU1c,"손난로와 보조배터리 2in1, 10000mAh, C타입 충전"
-p09,묘메이트 고양이 자동 나비 장난감,pet,,,https://link.coupang.com/a/hJJV3Jbdf2,나비가 자동으로 움직이는 꼬리잡기 장난감
-p10,VESTRA 붕어빵 기계 6구,kitchen,,,https://link.coupang.com/a/hJJWOoQQfs,"전기 붕어빵·잉어빵 메이커, 한 번에 6구"
-p11,로커스 강아지 우비,pet,,,https://link.coupang.com/a/hJJXv8HJV6,"강아지 우비, 파인애플옐로우 색상"
-p12,GONEO 무선 모션센서 조명,light,,,https://link.coupang.com/a/hJJYifZS0a,"충전식 무선 모션센서 조명, 자석식 부착, 20cm"
-p13,코지스 고양이 자동 급수기,pet,,,https://link.coupang.com/a/hJJY26BTEa,고양이·강아지용 자동 급수기
-p14,루니스 발난로 파티션 히터,living,,,https://link.coupang.com/a/hJJ0vXILkG,"책상 밑에 세우는 3면 파티션 히터, 무릎담요 포함"
 s01,"미닉스 미니 식기세척기 PRO 3인용, 오트밀베이지, MNDW-110OB, 고객직접설치",kitchen,,,https://link.coupang.com/a/hWFZYhHtEi,"3인용 미니 식기세척기, 고객이 직접 설치하는 방식"
 s02,2세대 ROMIN 무선 미니 청소기 에어건 진공 핸드청소기,living,,,https://link.coupang.com/a/hWGeUj5IRg,"무선 미니 핸드청소기, 에어건 기능"
 s03,"쿠첸 제로핏 음식물 처리기 가정용, 아이보리, CFP-EN302DBII",kitchen,,,https://link.coupang.com/a/hWGfRpdarQ,"가정용 음식물 처리기, 아이보리 색상"
@@ -25,3 +11,6 @@ s09,"RICHOME 자동 디스펜서 거품타입 충전식 비접촉 센서, 화이
 s10,"Y형 튼튼한 접이식 빨래 건조대, 베이지",living,,,https://link.coupang.com/a/hWGaBVuulw,"Y자 모양 접이식 빨래 건조대, 베이지 색상"
 s11,"로보락 로봇청소기, Q8+, 화이트",living,,,https://link.coupang.com/a/hWGWMRAlhc,"로봇청소기, 화이트 색상"
 s12,"삼성전자 블루스카이 5500 공기청정기 60㎡, AP70F06103RTD, 어스 브라운",living,,,https://link.coupang.com/a/hWGXXonFTg,"60㎡ 공간용 공기청정기, 어스 브라운 색상"
+z05,루아즈 선셋 무드등,light,,,https://link.coupang.com/a/hJJQjgGCUS,"노을빛 조명을 비추는 선셋 무드등, 선셋레드 색상"
+z06,도르리 루나 LED 달조명,light,,,https://link.coupang.com/a/hJJQ3MDasm,"달 모양 LED 테이블 램프, 취침등으로 쓰는 인테리어 조명"
+z12,GONEO 무선 모션센서 조명,light,,,https://link.coupang.com/a/hJJYifZS0a,"충전식 무선 모션센서 조명, 자석식 부착, 20cm"
