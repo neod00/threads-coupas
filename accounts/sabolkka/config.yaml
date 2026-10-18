@@ -79,7 +79,7 @@ criteria:
 digest_time_kst: "21:00"          # 일일 요약 발송 시각 (Step 5)
 
 # 첫 실제 발행일 (YYYY-MM-DD). 주차 계산 기준. 실제 발행 전에는 비워 둔다.
-test_start_date: null   # sabol.kka 첫 실제 발행일(YYYY-MM-DD). 실제 발행 전에는 비워 둔다
+test_start_date: 2026-10-19   # sabol.kka 첫 실제 발행일
 
 # 만들 글 유형 (calc, compare, pick, bundle, talk, tip 중에서). 2026-10-16 사용자 결정: 팁·계산·비교 글은 재미없어서 중단.
 # 링크 글 2자리 = 소개(pick)·시즌 모음(bundle, 이틀에 한 번), 링크 없는 2자리 = 참여형(talk).
