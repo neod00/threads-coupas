@@ -1,9 +1,4 @@
 product_id,name,category,power_w,default_hours,link,note
-h01,한경희 2단 카본히터,heater,900,4,https://link.coupang.com/a/holG7bYEO4,"자동 좌우회전, 2단 출력"
-h02,유니맥스 오방향 전기난로,heater,2000,4,https://link.coupang.com/a/holNcSYOrs,다섯 방향으로 열을 내는 난로
-b01,한일의료기 따스온 탄소매트 전기요,blanket,160,8,https://link.coupang.com/a/hpHjEeCVqe,"세탁 가능한 탄소매트 전기요"
-f01,한경희 욕실용 전기 온풍기,fan_heater,2000,1,https://link.coupang.com/a/holUnWPYYe,"욕실용, 리모컨 조작"
-u01,한경희 대용량 가습기,humidifier,25,10,https://link.coupang.com/a/holZ4dauUC,"대용량 투명 물통, 노즐 회전"
 p01,요리죠리하우스 댕라이트,pet,,,https://link.coupang.com/a/hJJtyVELUi,"강아지 목에 거는 LED 라이트, 충전식, 방수"
 p02,펫토리아 고양이 캣닢 비눗방울,pet,,,https://link.coupang.com/a/hJJNdwroey,"캣닢향 비눗방울 장난감, 120ml"
 p03,레토 강아지 당근밭 노즈워크 담요,pet,,,https://link.coupang.com/a/hJJNTkaIvI,당근밭 모양 노즈워크 담요 매트
@@ -18,3 +13,15 @@ p11,로커스 강아지 우비,pet,,,https://link.coupang.com/a/hJJXv8HJV6,"강�
 p12,GONEO 무선 모션센서 조명,light,,,https://link.coupang.com/a/hJJYifZS0a,"충전식 무선 모션센서 조명, 자석식 부착, 20cm"
 p13,코지스 고양이 자동 급수기,pet,,,https://link.coupang.com/a/hJJY26BTEa,고양이·강아지용 자동 급수기
 p14,루니스 발난로 파티션 히터,living,,,https://link.coupang.com/a/hJJ0vXILkG,"책상 밑에 세우는 3면 파티션 히터, 무릎담요 포함"
+s01,"미닉스 미니 식기세척기 PRO 3인용, 오트밀베이지, MNDW-110OB, 고객직접설치",kitchen,,,https://link.coupang.com/a/hWFZYhHtEi,"3인용 미니 식기세척기, 고객이 직접 설치하는 방식"
+s02,2세대 ROMIN 무선 미니 청소기 에어건 진공 핸드청소기,living,,,https://link.coupang.com/a/hWGeUj5IRg,"무선 미니 핸드청소기, 에어건 기능"
+s03,"쿠첸 제로핏 음식물 처리기 가정용, 아이보리, CFP-EN302DBII",kitchen,,,https://link.coupang.com/a/hWGfRpdarQ,"가정용 음식물 처리기, 아이보리 색상"
+s04,"올인원 고온 핸디 스팀 청소기, 레몬옐로우, KRC-C4903CST",living,,,https://link.coupang.com/a/hWGgMapY5I,"손에 들고 쓰는 핸디형 스팀 청소기, 레몬옐로우 색상"
+s05,"쿠첸 에어프라이어 5L, COV-D050G, GRAY",kitchen,,,https://link.coupang.com/a/hWF7diyRxI,"5L 용량 에어프라이어, 그레이 색상"
+s06,"블랙앤데커 304스텐 통주물 이중단열 무선 전기포트 온무드, BXEK2250-A",kitchen,,,https://link.coupang.com/a/hWF7TE6NJ7,304 스테인리스 이중단열 무선 전기포트
+s07,예손 무연 와이드 전기그릴 분리세척 멀티그릴 테이블쿠커,kitchen,,,https://link.coupang.com/a/hWF8z5hWZU,"와이드형 전기그릴, 판을 분리해서 씻는 방식"
+s08,88그로스 진공 밀폐용기 5종 + 전동펌프 세트,kitchen,,,https://link.coupang.com/a/hWF9eVAHDw,진공 밀폐용기 5종과 전동펌프가 함께 든 세트
+s09,"RICHOME 자동 디스펜서 거품타입 충전식 비접촉 센서, 화이트",living,,,https://link.coupang.com/a/hWF9WxbaGy,"손을 대면 거품이 나오는 충전식 센서 디스펜서, 배터리 잔량 표시"
+s10,"Y형 튼튼한 접이식 빨래 건조대, 베이지",living,,,https://link.coupang.com/a/hWGaBVuulw,"Y자 모양 접이식 빨래 건조대, 베이지 색상"
+s11,"아케이바이 휘어지는 청소 틈새브러쉬, 블루, 4개",living,,,https://link.coupang.com/a/hWGbhrRxcq,휘어지는 틈새 청소 브러시 4개 세트
+s12,"대림바스 디클린 바스템 샤워기 호환필터, 화이트, 4개, 3중 헤드 필터",living,,,https://link.coupang.com/a/hWGbWCro28,샤워기 헤드에 끼우는 3중 필터 4개
