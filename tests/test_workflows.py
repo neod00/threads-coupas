@@ -78,8 +78,8 @@ def test_every_job_runs_one_account_per_matrix_entry(name):
         assert job["strategy"]["fail-fast"] is False
         matrix = job["strategy"]["matrix"]["account"]
         assert "fromJSON" in matrix and "vars.ACCOUNTS_JSON || '[\"openbrain\"]'" in matrix   # 예약 실행은 변수에 적은 계정들, 변수가 없으면 기존 계정만
-        assert job["env"]["ACCOUNT"] == "${{ matrix.account == 'openbrain' && '' || matrix.account }}"
-        assert job["env"]["SFX"] == "${{ matrix.account == 'openbrain' && '' || format('_{0}', matrix.account) }}"
+        assert job["env"]["ACCOUNT"] == "${{ matrix.account != 'openbrain' && matrix.account || '' }}"
+        assert job["env"]["SFX"] == "${{ matrix.account != 'openbrain' && format('_{0}', matrix.account) || '' }}"
 
 
 @pytest.mark.parametrize("name", WORKFLOWS)
@@ -153,8 +153,8 @@ def test_every_job_runs_one_account_per_matrix_entry(name):
         assert job["strategy"]["fail-fast"] is False
         matrix = job["strategy"]["matrix"]["account"]
         assert "fromJSON" in matrix and "vars.ACCOUNTS_JSON || '[\"openbrain\"]'" in matrix   # 예약 실행은 변수에 적은 계정들, 변수가 없으면 기존 계정만
-        assert job["env"]["ACCOUNT"] == "${{ matrix.account == 'openbrain' && '' || matrix.account }}"
-        assert job["env"]["SFX"] == "${{ matrix.account == 'openbrain' && '' || format('_{0}', matrix.account) }}"
+        assert job["env"]["ACCOUNT"] == "${{ matrix.account != 'openbrain' && matrix.account || '' }}"
+        assert job["env"]["SFX"] == "${{ matrix.account != 'openbrain' && format('_{0}', matrix.account) || '' }}"
 
 
 @pytest.mark.parametrize("name", WORKFLOWS)
@@ -202,3 +202,11 @@ def test_supabase_generate_cron():
     assert "github_pat_" not in sql and "__GH_DISPATCH_TOKEN__" not in sql
     assert "gh_dispatch_token" in sql
     assert "AUTO_PUBLISH_DISABLED" in load("generate.yml")["jobs"]["generate"]["env"]
+
+
+@pytest.mark.parametrize("name", WORKFLOWS)
+def test_no_empty_string_on_the_left_of_or(name):
+    """GitHub 표현식은 빈 문자열을 거짓으로 본다: `cond && '' || x` 는 cond 가 참이어도 x 가 된다 (2026-10-18 기존 계정이
+    ACCOUNT=openbrain 으로 돌아 실패한 원인). 기존 계정 값을 '' 로 만들 때는 `account != 'openbrain' && x || ''` 로 쓴다."""
+    text = (WF_DIR / name).read_text(encoding="utf-8")
+    assert not re.search(r"&&\s*''\s*\|\|", text), "`&& '' ||` 패턴은 빈 값이 거짓이라 쓸 수 없다"

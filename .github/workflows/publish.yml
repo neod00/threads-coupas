@@ -40,10 +40,10 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 10
     env:
-      ACCOUNT: ${{ matrix.account == 'openbrain' && '' || matrix.account }}
-      SFX: ${{ matrix.account == 'openbrain' && '' || format('_{0}', matrix.account) }}
-      AUTO_PUBLISH_DISABLED: ${{ vars[format('AUTO_PUBLISH_DISABLED{0}', matrix.account == 'openbrain' && '' || format('_{0}', matrix.account))] }}
-      DRY_RUN: ${{ (vars[format('DRY_RUN{0}', matrix.account == 'openbrain' && '' || format('_{0}', matrix.account))] == 'false' && inputs.dry_run != true) && 'false' || 'true' }}
+      ACCOUNT: ${{ matrix.account != 'openbrain' && matrix.account || '' }}
+      SFX: ${{ matrix.account != 'openbrain' && format('_{0}', matrix.account) || '' }}
+      AUTO_PUBLISH_DISABLED: ${{ vars[format('AUTO_PUBLISH_DISABLED{0}', matrix.account != 'openbrain' && format('_{0}', matrix.account) || '')] }}
+      DRY_RUN: ${{ (vars[format('DRY_RUN{0}', matrix.account != 'openbrain' && format('_{0}', matrix.account) || '')] == 'false' && inputs.dry_run != true) && 'false' || 'true' }}
     steps:
       - uses: actions/checkout@v5
       - uses: actions/setup-python@v6
