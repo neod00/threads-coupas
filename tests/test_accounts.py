@@ -126,3 +126,29 @@ def test_sabolkka_schema_sql_matches_base_schema():
     assert "grant usage on schema sabolkka to service_role;" in mine
     assert "to anon" not in mine and "to authenticated" not in mine
     assert mine.count("enable row level security") == base.count("enable row level security") == 5
+
+
+def test_reviewer_tone_rule_per_account_and_polite_prompt_unchanged():
+    import dataclasses
+    import reviewer
+    polite = settings.load_config()
+    casual = dataclasses.replace(polite, tone="casual")
+    p, c = reviewer.system_prompt(polite), reviewer.system_prompt(casual)
+    assert "- R11 말투가 존댓말(해요체 또는 합니다체)로 일관되고" in p and "반말·자음 표현(ㅋㅋ)" in p
+    assert "반말·해요체·합니다체 모두 허용" in c and "반말·자음 표현" not in c
+    assert reviewer.prompt_hash(polite) != reviewer.prompt_hash(casual)       # 계정마다 시험지를 따로 본다
+
+
+def test_generator_reply_line_spec_follows_tone():
+    import dataclasses
+    import generator
+    polite = settings.load_config()
+    assert "해요체" in generator.system_prompt(polite, "pick", "link_in_reply")
+    casual = dataclasses.replace(polite, tone="casual")
+    assert "친근한 반말" in generator.system_prompt(casual, "pick", "link_in_reply")
+
+
+def test_talk_topics_from_config_replace_default_list():
+    import generator
+    assert [s["tip_topic"] for s in generator.subjects([], "talk", talk_topics=("a 사라 vs 마라",))] == ["a 사라 vs 마라"]
+    assert len(generator.subjects([], "talk")) == len(generator.TALK_TOPICS)

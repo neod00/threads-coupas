@@ -111,7 +111,8 @@ def run_generate(store, cfg: Config, tariff, products, *, complete, review_call,
     made = []
     for i, post_type in enumerate(types):
         # 가장 오래 안 쓴 (상품 × 사용시간) 조합·팁 주제를 고른다 (같은 숫자의 글이 되풀이되면 검수 R9 에 막힌다)
-        subject = generator.pick_subject(products, post_type, tomorrow, used, offset=i, bundles=bundles)
+        subject = generator.pick_subject(products, post_type, tomorrow, used, offset=i, bundles=bundles,
+                                         talk_topics=cfg.talk_topics)
         picked, topic, bundle = subject["picked"], subject["tip_topic"], subject.get("bundle")
         if post_type == "tip":
             # tip 은 예시 계산에 쓸 상품 1개를 고른다 (링크는 붙이지 않음)

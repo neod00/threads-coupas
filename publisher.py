@@ -6,7 +6,7 @@
   1 킬 스위치 AUTO_PUBLISH_DISABLED → 아무것도 하지 않고 정상 종료 (규칙 8)
   2 자동 정지 상태 → 종료 (규칙 10)
   3 검수자 시험지 합격 확인 → 불합격이면 실제 발행 거부 (규칙 9). 케이스가 바뀐 경우면 자동 정지 (규칙 10-5)
-  4 답글만 실패했던 글이 있으면 답글만 재시도
+  4 답글을 아직 안 단 글(답글만 실패했거나 reply_delay_hours 를 기다리는 글)은 때가 되면 답글만 단다
   5 approved 이고 scheduled_at <= now 인 글 중 가장 이른 1개
   6 발행 직전 검사 (publish_post)
       - 이미 threads_media_id 가 있으면 건너뜀 (멱등성)
@@ -28,7 +28,7 @@ import json
 import logging
 import sys
 import time
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from typing import Callable
 from urllib.parse import urlparse
 
@@ -313,9 +313,21 @@ def publish_post(post: dict, *, store, cfg: Config, api, link_checker, notifier,
         store.log_event("published", {"post_id": post["id"], "threads_media_id": media_id})
         autostop.record_publish_result(store, notifier, True)
 
-    reply = publish_reply(post, store=store, api=api, notifier=notifier, dry_run=dry_run, sleep=sleep)
+    if cfg.reply_delay_hours > 0 and not dry_run:
+        # 링크 답글은 run_once 의 재시도 단계가 reply_delay_hours 뒤에 달아 준다 (본문은 이미 published)
+        log.info(f"[발행] 링크 답글은 {cfg.reply_delay_hours:g}시간 뒤에 답니다")
+        reply = None
+    else:
+        reply = publish_reply(post, store=store, api=api, notifier=notifier, dry_run=dry_run, sleep=sleep)
     return {"action": "dry_run" if dry_run else "published", "post_id": post["id"],
             "threads_media_id": media_id, "reply": reply}
+
+
+def reply_due(post: dict, cfg: Config, now: datetime) -> bool:
+    """링크 답글을 달 때가 됐는지. cfg.reply_delay_hours 가 0 이면 항상 True (본문 직후)."""
+    if cfg.reply_delay_hours <= 0 or not post.get("published_at"):
+        return True
+    return now >= rules.as_dt(post["published_at"]) + timedelta(hours=cfg.reply_delay_hours)
 
 
 def publish_reply(post: dict, *, store, api, notifier, dry_run: bool, sleep=time.sleep) -> str | None:
@@ -370,7 +382,8 @@ def run_once(store, cfg: Config, *, env=None, api, link_checker, notifier, now: 
 
     # 답글만 실패했던 글: 답글만 재시도
     for post in store.list_posts(["published"]):
-        if post.get("variant") == "link_in_reply" and post.get("threads_media_id") and not post.get("threads_reply_id"):
+        if (post.get("variant") == "link_in_reply" and post.get("threads_media_id") and not post.get("threads_reply_id")
+                and reply_due(post, cfg, now)):
             publish_reply(post, store=store, api=api, notifier=notifier, dry_run=dry_run, sleep=sleep)
 
     due = sorted((p for p in store.list_posts(["approved"])

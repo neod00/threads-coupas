@@ -312,3 +312,30 @@ def test_disclosure_with_banned_word_rejected(raw):
 def test_test_start_date_parsed(raw):
     raw["test_start_date"] = "2026-11-02"
     assert settings.parse_config(raw).test_start_date == date(2026, 11, 2)
+
+
+# ── 계정별 설정: tone·talk_topics·reply_delay_hours (2026-10-18) ──────────────
+
+def _raw_config():
+    import yaml
+    return yaml.safe_load(settings.PROJECT_ROOT.joinpath("config.yaml").read_text(encoding="utf-8"))
+
+
+def test_account_options_default_to_existing_behaviour():
+    cfg = settings.parse_config(_raw_config())
+    assert (cfg.tone, cfg.talk_topics, cfg.reply_delay_hours) == ("polite", (), 0.0)
+
+
+def test_account_options_parse():
+    raw = _raw_config() | {"tone": "casual", "talk_topics": ["식세기 사라 vs 마라", "건조기 사라 vs 마라"], "reply_delay_hours": 3}
+    cfg = settings.parse_config(raw)
+    assert cfg.tone == "casual" and cfg.talk_topics == ("식세기 사라 vs 마라", "건조기 사라 vs 마라") and cfg.reply_delay_hours == 3.0
+
+
+@pytest.mark.parametrize("change", [
+    {"tone": "rude"}, {"talk_topics": ["a", "a"]}, {"talk_topics": [""]}, {"talk_topics": ["가" * 61]},
+    {"reply_delay_hours": -1}, {"reply_delay_hours": 13}, {"reply_delay_hours": "3"}, {"reply_delay_hours": True},
+])
+def test_bad_account_options_refused(change):
+    with pytest.raises(settings.ConfigError):
+        settings.parse_config(_raw_config() | change)

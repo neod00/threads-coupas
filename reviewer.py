@@ -106,9 +106,20 @@ def absolute_rules(plan_path=PLAN_PATH) -> str:
     return m.group(0).strip()
 
 
+# R11 말투 기준. polite 는 예전 reviewer.md 의 R11 문장과 글자 그대로 같아서 기존 계정의 프롬프트 해시(시험지)가 바뀌지 않는다.
+TONE_RULES = {
+    "polite": '말투가 존댓말(해요체 또는 합니다체)로 일관되고, 어색하거나 스팸 같은 문장이 없음. 반말·자음 표현(ㅋㅋ)·"지금 바로 클릭" 같은 문장은 fail. 해요체의 가벼운 말투, 짧은 줄바꿈, 독자에게 묻는 마지막 질문은 이 계정의 정해진 형식이므로 fail 이 아닙니다. R4 에서 허용한 결론 형식도 광고성 문장으로 보지 않습니다.',
+    "casual": ("말투가 한 글 안에서 일관되고(반말·해요체·합니다체 모두 허용), 어색하거나 스팸 같은 문장이 없음. "
+               "자음 표현(ㅋㅋ, ㅠㅠ)·\"지금 바로 클릭\" 같은 문장은 fail. "
+               "이 계정은 친근한 반말이 정해진 형식이므로 반말, 짧은 줄바꿈, 독자에게 묻는 마지막 질문은 fail 이 아닙니다. "
+               "R4 에서 허용한 결론 형식도 광고성 문장으로 보지 않습니다."),
+}
+
+
 def system_prompt(cfg: Config, prompt_path=PROMPT_PATH, plan_path=PLAN_PATH) -> str:
     return prompt_path.read_text(encoding="utf-8").format(
         absolute_rules=absolute_rules(plan_path), disclosure_text=cfg.disclosure_text,
+        tone_rule=TONE_RULES[cfg.tone],
     )
 
 

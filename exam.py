@@ -25,12 +25,13 @@ import generator
 import reviewer as reviewer_mod
 from bundles import parse_bundles
 from products import parse_products
-from settings import PROJECT_ROOT, Config
+from settings import ACCOUNT_DIR, PROJECT_ROOT, Config
 
 log = logging.getLogger("threads_coupas")
 
 CASES_PATH = PROJECT_ROOT / "tests" / "review_cases" / "cases.json"
-STATE_PATH = PROJECT_ROOT / "state" / "reviewer_exam.json"
+# 계정마다 합격 기록을 따로 둔다 (검수 프롬프트가 계정마다 다를 수 있다). 기존 계정은 예전 위치 그대로.
+STATE_PATH = ACCOUNT_DIR / "state" / "reviewer_exam.json"
 NORMAL_MIN_RATIO = 0.8              # 문제 글은 전부 막아야 하고, 정상 글은 이 비율 이상 통과해야 한다 (10개 중 8개 기준 그대로)
 ABORT_AFTER_CALL_FAILURES = 3       # 호출 자체가 연속으로 실패하면 시험을 중단한다 (크레딧 부족·인증 오류)
 

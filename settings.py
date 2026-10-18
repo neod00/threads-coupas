@@ -78,6 +78,8 @@ KST = timezone(timedelta(hours=9), "KST")
 # ── 코드에 고정한 한도 (config 로 완화할 수 없음) ───────────────────────
 HARD_MAX_POSTS_PER_DAY = 6      # 규칙 5 (2026-10-17 사용자 결정으로 5 → 6)
 HARD_MIN_GAP_HOURS = 2          # 규칙 5
+TONES = ("polite", "casual")
+MAX_REPLY_DELAY_HOURS = 12      # 답글이 너무 늦으면 글과 링크가 따로 논다 (재시도 주기 30분 포함)
 THREADS_MAX_CHARS = 500         # Threads API 텍스트 한도
 THREADS_MAX_LINKS = 5           # Threads API 글당 고유 링크 한도
 TOKEN_LIFETIME_DAYS = 60        # 장기 토큰 유효기간 (THREADS_API_NOTES.md)
@@ -352,6 +354,12 @@ class Config:
     test_start_date: date | None
     # 생성할 글 유형 (없으면 전부). 2026-10-16: 팁·계산·비교 글이 재미없다는 판단으로 pick 만 남김
     post_types: tuple[str, ...] = ("calc", "compare", "pick", "tip")
+    # 말투: polite(해요체, 기본) 또는 casual(친근한 반말). 생성 프롬프트는 계정 폴더 prompts/ 에서, 검수 R11 은 이 값으로 정한다
+    tone: str = "polite"
+    # 참여형(talk) 글 주제. 비우면 generator.TALK_TOPICS(겨울 난방 주제)를 쓴다
+    talk_topics: tuple[str, ...] = ()
+    # 링크 답글을 본문 발행 후 몇 시간 뒤에 달지 (0 이면 바로). "사라 vs 마라" 글 뒤에 결과·링크를 늦게 다는 방식
+    reply_delay_hours: float = 0.0
 
 
 def provider_of(model: str) -> str:
@@ -515,6 +523,16 @@ def parse_config(raw) -> Config:
     if (not isinstance(types, list | tuple) or not types
             or any(t not in POST_TYPE_NAMES for t in types)):
         raise ConfigError(f"post_types 는 {', '.join(POST_TYPE_NAMES)} 중 하나 이상의 목록이어야 합니다: {types!r}")
+    tone = raw.get("tone", Config.tone)
+    if tone not in TONES:
+        raise ConfigError(f"tone 은 {', '.join(TONES)} 중 하나여야 합니다: {tone!r}")
+    topics = raw.get("talk_topics") or []
+    if (not isinstance(topics, list | tuple) or any(not isinstance(t, str) or not t.strip() or len(t) > 60 for t in topics)
+            or len(set(topics)) != len(topics)):
+        raise ConfigError("talk_topics 는 겹치지 않는 60자 이하 문장의 목록이어야 합니다.")
+    delay = raw.get("reply_delay_hours", Config.reply_delay_hours)
+    if isinstance(delay, bool) or not isinstance(delay, int | float) or not 0 <= delay <= MAX_REPLY_DELAY_HOURS:
+        raise ConfigError(f"reply_delay_hours 는 0~{MAX_REPLY_DELAY_HOURS} 시간 사이 숫자여야 합니다: {delay!r}")
     return Config(
         max_posts_per_day=max_posts,
         min_gap_hours=min_gap,
@@ -531,6 +549,9 @@ def parse_config(raw) -> Config:
         digest_time_kst=_parse_hhmm(raw["digest_time_kst"], "digest_time_kst"),
         test_start_date=None if start is None else _parse_date(start, "test_start_date"),
         post_types=tuple(types),
+        tone=tone,
+        talk_topics=tuple(t.strip() for t in topics),
+        reply_delay_hours=float(delay),
     )
 
 

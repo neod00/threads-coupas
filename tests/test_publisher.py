@@ -454,3 +454,58 @@ def test_threads_api_errors():
 
     with pytest.raises(NetworkError):
         publisher.ThreadsApi("123", "T", session=Down()).create_container({"media_type": "TEXT", "text": "t"})
+
+
+# ── 링크 답글 지연 (reply_delay_hours, 2026-10-18) ──────────────────────────
+
+import dataclasses
+
+
+def delayed(cfg, hours=3.0):
+    return dataclasses.replace(cfg, reply_delay_hours=hours)
+
+
+def test_delayed_reply_waits_then_posts_only_after_delay(cfg, setup):
+    cfg = delayed(cfg)
+    reply = f"{cfg.disclosure_text}\n\n제품은 여기서 볼 수 있어."
+    post = setup.add(variant="link_in_reply", reply_text=reply)
+    result, api = run(setup, cfg)
+    saved = setup.store.get_post(post["id"])
+    assert result["action"] == "published" and result["reply"] is None
+    assert saved["status"] == "published" and saved["threads_reply_id"] is None
+    assert not any("reply_to_id" in c[1] for c in api.calls if c[0] == "create")
+
+    # 2시간 50분 뒤: 아직
+    _, api = run(setup, cfg, now=NOW + timedelta(hours=2, minutes=50))
+    assert not any("reply_to_id" in c[1] for c in api.calls if c[0] == "create")
+    assert setup.store.get_post(post["id"])["threads_reply_id"] is None
+
+    # 3시간 뒤: 답글만 달린다 (본문은 다시 만들지 않는다)
+    _, api = run(setup, cfg, now=NOW + timedelta(hours=3, minutes=1))
+    creates = [c[1] for c in api.calls if c[0] == "create"]
+    assert creates == [{"media_type": "TEXT", "text": reply, "reply_to_id": saved["threads_media_id"],
+                        "link_attachment": post["link_url"]}]
+    assert setup.store.get_post(post["id"])["threads_reply_id"] == "m-c1"
+
+
+def test_default_zero_delay_posts_reply_immediately(cfg, setup):
+    post = setup.add(variant="link_in_reply", reply_text=f"{cfg.disclosure_text}\n\nx")
+    result, _ = run(setup, cfg)
+    assert result["reply"] == "m-c2" and setup.store.get_post(post["id"])["threads_reply_id"] == "m-c2"
+
+
+def test_delayed_reply_is_never_posted_twice(cfg, setup):
+    cfg = delayed(cfg)
+    post = setup.add(variant="link_in_reply", reply_text=f"{cfg.disclosure_text}\n\nx")
+    run(setup, cfg)
+    run(setup, cfg, now=NOW + timedelta(hours=4))
+    _, api = run(setup, cfg, now=NOW + timedelta(hours=5))
+    assert not any(c[0] == "create" for c in api.calls)
+
+
+def test_dry_run_still_logs_reply_request_with_delay(cfg, setup, caplog):
+    cfg = delayed(cfg)
+    setup.add(variant="link_in_reply", reply_text=f"{cfg.disclosure_text}\n\nx")
+    with caplog.at_level(logging.INFO):
+        result, _ = run(setup, cfg, env=DRY, api=publisher.DryRunApi("123"))
+    assert result["action"] == "dry_run" and result["reply"] is not None

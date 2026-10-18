@@ -17,3 +17,9 @@
 - 코드는 `ACCOUNT` 가 있으면 그 이름의 스키마로 접근한다 (`store.py`). 키가 같아서 한 키가 새면 두 계정 데이터가 같이 노출된다.
 - 알림(텔레그램) 앞에는 `[sabolkka]` 가 붙는다. 기존 계정 알림은 그대로다.
 - 시작은 `DRY_RUN_SABOLKKA` 를 만들지 않거나 `true` 로 둔다. 실제 발행은 사람이 `false` 로 바꿀 때만.
+
+## 계정별 설정 항목 (config.yaml)
+- `tone`: `polite`(기본, 해요체) 또는 `casual`(친근한 반말). 생성 말투는 `accounts/<계정>/prompts/` 의 프롬프트가 정하고, `tone` 은 검수자 R11 기준과 링크 답글 안내문 말투를 고른다.
+- `talk_topics`: 참여형(talk) 글 주제 목록. 비우면 기본 목록(겨울 난방 주제).
+- `reply_delay_hours`: 링크 답글을 본문 발행 몇 시간 뒤에 달지 (0~12, 기본 0 = 바로). 답글은 발행기가 30분마다 확인하다가 때가 되면 단다. sabolkka 는 3.
+- 검수자 시험 기록은 계정마다 따로다 (`state/` 또는 `accounts/<계정>/state/`). 검수 프롬프트(tone 포함)가 바뀌면 그 계정은 `ACCOUNT=<계정> python exam.py` 로 다시 시험을 본다.

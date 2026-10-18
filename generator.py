@@ -125,9 +125,13 @@ def _read_prompt(name: str) -> str:
     return account_path("prompts", name).read_text(encoding="utf-8")
 
 
+POLITE_REPLY_SPEC = '"링크 답글에 넣을 안내 한 문장, 해요체 (예: 제품은 여기에서 볼 수 있어요.)"'
+CASUAL_REPLY_SPEC = '"링크 답글에 넣을 안내 한 문장, 친근한 반말 (예: 제품은 여기서 볼 수 있어.)"'
+
+
 def system_prompt(cfg: Config, post_type: str, variant: str | None) -> str:
     reply_spec = (
-        '"링크 답글에 넣을 안내 한 문장, 해요체 (예: 제품은 여기에서 볼 수 있어요.)"'
+        (CASUAL_REPLY_SPEC if cfg.tone == "casual" else POLITE_REPLY_SPEC)
         if variant == "link_in_reply" else "null"
     )
     number_rule = "훅에 숫자가 없어도 됩니다. 숫자를 쓰면 데이터에 있는 값만 씁니다. kWh·W 로 시작하지 않습니다."
@@ -229,14 +233,15 @@ def subject_key(post: dict) -> str | None:
     return None
 
 
-def subjects(products: Sequence[Product], post_type: str, bundles: Sequence = (), day: date | None = None) -> list[dict]:
+def subjects(products: Sequence[Product], post_type: str, bundles: Sequence = (), day: date | None = None,
+             talk_topics: Sequence[str] = ()) -> list[dict]:
     """고를 수 있는 모든 주제: {key, picked, hours, tip_topic, bundle}. bundle 은 day 에 시즌인 테마만."""
     everything = sorted(products, key=lambda p: p.product_id)
     ordered = [p for p in everything if p.has_power]        # 전기요금 계산은 소비전력이 있는 상품만
     if post_type == "tip":
         return [{"key": f"tip|{t}", "picked": [], "hours": None, "tip_topic": t} for t in TIP_TOPICS]
     if post_type == "talk":
-        return [{"key": f"talk|{t}", "picked": [], "hours": None, "tip_topic": t} for t in TALK_TOPICS]
+        return [{"key": f"talk|{t}", "picked": [], "hours": None, "tip_topic": t} for t in (talk_topics or TALK_TOPICS)]
     if post_type == "bundle":
         return [{"key": f"bundle|{b.bundle_id}", "picked": [], "hours": None, "tip_topic": None, "bundle": b}
                 for b in bundles if day is None or b.in_season(day)]
@@ -260,10 +265,10 @@ def subjects(products: Sequence[Product], post_type: str, bundles: Sequence = ()
 
 
 def pick_subject(products: Sequence[Product], post_type: str, day: date, used: Sequence[dict] = (),
-                 offset: int = 0, bundles: Sequence = ()) -> dict:
+                 offset: int = 0, bundles: Sequence = (), talk_topics: Sequence[str] = ()) -> dict:
     """가장 오래 안 쓴 주제를 고른다. used: 실제로 쓰인(approved·published) posts 행, 오래된 것 → 최신 순.
     한 번도 안 쓴 주제가 먼저고, 그 안에서는 최근에 다룬 상품을 뒤로 미룬다. 동률이면 날짜로 돌린다."""
-    candidates = subjects(products, post_type, bundles, day)
+    candidates = subjects(products, post_type, bundles, day, talk_topics)
     if not candidates:
         raise ValueError(f"{post_type} 에 쓸 주제가 없습니다.")
     last_key, last_product = {}, {}
