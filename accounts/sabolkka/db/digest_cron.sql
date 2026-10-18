@@ -1,4 +1,4 @@
--- sabolkka 계정용. 새 Supabase 프로젝트(sabolkka 전용)의 SQL Editor 에서 실행한다. 기존 계정용(db/)과 달리 account=sabolkka 로 깨운다.
+-- sabolkka 계정용. 기존 계정과 같은 Supabase 프로젝트의 SQL Editor 에서 실행한다. 예약 이름이 sabolkka 전용이고 account=sabolkka 로 깨운다.
 -- 일일 요약 깨우기 예약 (Supabase pg_cron → GitHub digest.yml 수동 실행)
 -- GitHub 예약 실행이 몇 시간씩 밀려서, Supabase 가 매일 12:00 UTC(21:00 KST)에 digest.yml 을 직접 실행시킨다.
 -- 요약이 두 번 가지 않도록 digest.yml 의 GitHub 예약(schedule)은 없앴다. config.yaml 의 digest_time_kst 를 바꾸면 아래 cron 도 같이 바꾼다 (UTC).
@@ -15,7 +15,7 @@ end $$;
 
 -- 같은 이름으로 다시 실행하면 예약이 덮어써진다.
 select cron.schedule(
-  'threads-coupas-digest',
+  'threads-coupas-sabolkka-digest',
   '0 12 * * *',
   $job$
   select net.http_post(
@@ -35,4 +35,4 @@ select cron.schedule(
 -- 확인용: 예약 목록
 select jobid, jobname, schedule, active from cron.job where jobname like 'threads-coupas-%' order by jobname;
 
--- 끄려면: select cron.unschedule('threads-coupas-digest');
+-- 끄려면: select cron.unschedule('threads-coupas-sabolkka-digest');

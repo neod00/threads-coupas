@@ -1,4 +1,4 @@
--- sabolkka 계정용. 새 Supabase 프로젝트(sabolkka 전용)의 SQL Editor 에서 실행한다. 기존 계정용(db/)과 달리 account=sabolkka 로 깨운다.
+-- sabolkka 계정용. 기존 계정과 같은 Supabase 프로젝트의 SQL Editor 에서 실행한다. 예약 이름이 sabolkka 전용이고 account=sabolkka 로 깨운다.
 -- 생성 깨우기 예약 (Supabase pg_cron → GitHub generate.yml 수동 실행)
 -- GitHub 예약 실행이 몇 시간씩 밀려서, Supabase 가 매일 11:00 UTC(20:00 KST)에 generate.yml 을 직접 실행시킨다.
 -- 토큰은 db/publish_cron.sql 을 실행할 때 Vault 에 저장한 gh_dispatch_token 을 그대로 쓴다. 이 파일에는 토큰이 없다.
@@ -17,7 +17,7 @@ end $$;
 
 -- 같은 이름으로 다시 실행하면 예약이 덮어써진다.
 select cron.schedule(
-  'threads-coupas-generate',
+  'threads-coupas-sabolkka-generate',
   '0 11 * * *',
   $job$
   select net.http_post(
@@ -37,4 +37,4 @@ select cron.schedule(
 -- 확인용: 예약 목록
 select jobid, jobname, schedule, active from cron.job where jobname like 'threads-coupas-%' order by jobname;
 
--- 끄려면: select cron.unschedule('threads-coupas-generate');
+-- 끄려면: select cron.unschedule('threads-coupas-sabolkka-generate');

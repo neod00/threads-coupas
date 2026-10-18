@@ -1,34 +1,20 @@
--- sabolkka 계정용. 새 Supabase 프로젝트(sabolkka 전용)의 SQL Editor 에서 실행한다. 기존 계정용(db/)과 달리 account=sabolkka 로 깨운다.
--- 발행 깨우기 예약 (Supabase pg_cron → GitHub publish.yml 수동 실행)
--- GitHub 예약 실행(schedule)이 4~5시간씩 밀려서, Supabase 가 30분마다(매시 12분·42분, UTC 기준이지만 분은 같다)
--- publish.yml 을 workflow_dispatch 로 직접 실행시킨다.
+-- sabolkka 계정용. 기존 계정과 같은 Supabase 프로젝트의 SQL Editor 에서 실행한다. 예약 이름이 sabolkka 전용이고 account=sabolkka 로 깨운다.
+-- 발행 깨우기 예약 (Supabase pg_cron → GitHub publish.yml 수동 실행, 매시 12분·42분)
+-- 토큰은 db/publish_cron.sql 을 실행할 때 Vault 에 저장한 gh_dispatch_token 을 그대로 쓴다. 이 파일에는 토큰이 없다.
+-- 실제 발행 여부는 저장소 변수 DRY_RUN_SABOLKKA·AUTO_PUBLISH_DISABLED_SABOLKKA 가 정한다.
 --
--- 안전장치는 그대로다: dry_run=false 로 실행해도 저장소 변수 DRY_RUN 이 정확히 'false' 일 때만 실제 발행하고,
--- AUTO_PUBLISH_DISABLED=true 면 작업이 아예 돌지 않는다 (publish.yml).
---
--- 실행 방법: Supabase 대시보드 → SQL Editor 에 붙여 넣고 Run.
--- __GH_DISPATCH_TOKEN__ 자리에 토큰이 들어간 사본(.tmp/publish_cron_with_token.sql)을 쓴다. 저장소에는 토큰을 올리지 않는다.
--- 토큰: GitHub fine-grained token, 저장소 neod00/threads-coupas 하나, 권한 Actions: Read and write 만.
+-- 실행 방법: Supabase 대시보드 → SQL Editor 에 이 파일 전체를 붙여 넣고 Run.
 
-create extension if not exists pg_cron with schema pg_catalog;
-create extension if not exists pg_net with schema extensions;
-
--- 토큰은 Vault 에 암호화해 둔다. 다시 실행하면 값만 바꾼다.
 do $$
-declare
-  sid uuid;
 begin
-  select id into sid from vault.secrets where name = 'gh_dispatch_token';
-  if sid is null then
-    perform vault.create_secret('__GH_DISPATCH_TOKEN__', 'gh_dispatch_token', 'threads-coupas publish.yml dispatch');
-  else
-    perform vault.update_secret(sid, '__GH_DISPATCH_TOKEN__');
+  if not exists (select 1 from vault.secrets where name = 'gh_dispatch_token') then
+    raise exception 'Vault 에 gh_dispatch_token 이 없습니다. 먼저 db/publish_cron.sql 을 실행하세요.';
   end if;
 end $$;
 
 -- 같은 이름으로 다시 실행하면 예약이 덮어써진다.
 select cron.schedule(
-  'threads-coupas-publish',
+  'threads-coupas-sabolkka-publish',
   '12,42 * * * *',
   $job$
   select net.http_post(
@@ -46,6 +32,6 @@ select cron.schedule(
 );
 
 -- 확인용: 예약 목록
-select jobid, jobname, schedule, active from cron.job where jobname = 'threads-coupas-publish';
+select jobid, jobname, schedule, active from cron.job where jobname like 'threads-coupas-%' order by jobname;
 
--- 끄려면: select cron.unschedule('threads-coupas-publish');
+-- 끄려면: select cron.unschedule('threads-coupas-sabolkka-publish');

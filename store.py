@@ -85,9 +85,10 @@ class MemoryStore:
 class SupabaseStore:
     """supabase-py 로 같은 동작을 한다. 서버 쪽(GitHub Actions)에서 service role key 로만 쓴다."""
 
-    def __init__(self, url: str, service_role_key: str):
-        from supabase import create_client
-        self.db = create_client(url, service_role_key)
+    def __init__(self, url: str, service_role_key: str, schema: str | None = None):
+        from supabase import ClientOptions, create_client
+        # 계정마다 같은 프로젝트 안의 자기 스키마(accounts/<계정>/db/schema.sql)를 쓴다. 기존 계정은 기본(public).
+        self.db = create_client(url, service_role_key, options=ClientOptions(schema=schema) if schema else None)
 
     def insert_post(self, post: dict) -> dict:
         return self.db.table("posts").insert(post).execute().data[0]
@@ -159,4 +160,5 @@ class SupabaseStore:
 
 def open_store(secrets):
     secrets.require("supabase_url", "supabase_service_role_key")
-    return SupabaseStore(secrets.supabase_url, secrets.supabase_service_role_key)
+    from settings import ACCOUNT
+    return SupabaseStore(secrets.supabase_url, secrets.supabase_service_role_key, schema=ACCOUNT or None)

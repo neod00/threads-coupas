@@ -90,3 +90,39 @@ def test_telegram_messages_carry_account_label(monkeypatch):
     monkeypatch.setattr(notify.urllib.request, "urlopen", lambda req, timeout=0: sent.append(req.data.decode()) or Resp())
     notify.TelegramNotifier("t", "c").send("hello")
     assert "%5Bsabolkka%5D+hello" in sent[0]
+
+
+def test_store_uses_account_schema_only_for_non_default_accounts():
+    import store
+    mine = store.SupabaseStore("https://x.supabase.co", "sb_secret_" + "a" * 30, schema="sabolkka")
+    base = store.SupabaseStore("https://x.supabase.co", "sb_secret_" + "a" * 30)
+    assert mine.db.table("posts").headers.get("Accept-Profile") == "sabolkka"
+    assert mine.db.table("posts").headers.get("Content-Profile") == "sabolkka"
+    assert base.db.table("posts").headers.get("Accept-Profile") in (None, "public")
+
+
+def test_open_store_passes_account_as_schema(monkeypatch):
+    import store
+    seen = {}
+    monkeypatch.setattr(store, "SupabaseStore", lambda url, key, schema=None: seen.update(url=url, schema=schema))
+    secrets = type("S", (), {"supabase_url": "u", "supabase_service_role_key": "k", "require": lambda self, *a: None})()
+    monkeypatch.setattr(settings, "ACCOUNT", "sabolkka")
+    store.open_store(secrets)
+    assert seen["schema"] == "sabolkka"
+    monkeypatch.setattr(settings, "ACCOUNT", "")
+    store.open_store(secrets)
+    assert seen["schema"] is None
+
+
+def test_sabolkka_schema_sql_matches_base_schema():
+    """sabolkka 스키마는 db/schema.sql 과 같은 테이블·제약을 sabolkka 스키마에 만든다 (한쪽만 고치면 어긋난다)."""
+    base = (ROOT / "db" / "schema.sql").read_text(encoding="utf-8")
+    mine = (ROOT / "accounts" / "sabolkka" / "db" / "schema.sql").read_text(encoding="utf-8")
+    def tables(sql):
+        import re
+        return sorted(re.findall(r"create table if not exists (\w+) \((.*?)\n\);", sql, re.S))
+    assert tables(mine) == tables(base) and len(tables(base)) == 5
+    assert "create schema if not exists sabolkka;" in mine and "set search_path to sabolkka;" in mine
+    assert "grant usage on schema sabolkka to service_role;" in mine
+    assert "to anon" not in mine and "to authenticated" not in mine
+    assert mine.count("enable row level security") == base.count("enable row level security") == 5
