@@ -87,6 +87,7 @@ post_types: [pick, talk]
 
 # ── 계정 전용 설정 (2026-10-18) ──────────────────────────────
 tone: casual                  # 친근한 반말. 생성 프롬프트는 accounts/sabolkka/prompts/, 검수 R11 은 이 값을 따른다
+ops_advice: true            # 일일 요약에 "상품 링크 보충 필요"·"발행 수 늘려도 돼요" 알림 (ops_advice.py)
 reply_delay_hours: 3          # 링크 답글(광고 문구 + 링크)을 본문 발행 3시간 뒤에 단다
 # 참여형(talk) 글 주제: "사라 vs 마라" 질문. 가전·주방·꿀템·신기한 물건. 상품명·브랜드 없이 물건의 종류만 쓴다
 talk_topics:

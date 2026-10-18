@@ -360,6 +360,8 @@ class Config:
     talk_topics: tuple[str, ...] = ()
     # 링크 답글을 본문 발행 후 몇 시간 뒤에 달지 (0 이면 바로). "사라 vs 마라" 글 뒤에 결과·링크를 늦게 다는 방식
     reply_delay_hours: float = 0.0
+    # 일일 요약에 상품 링크 보충·발행 수 증가 알림을 넣을지 (ops_advice.py)
+    ops_advice: bool = False
 
 
 def provider_of(model: str) -> str:
@@ -533,6 +535,9 @@ def parse_config(raw) -> Config:
     delay = raw.get("reply_delay_hours", Config.reply_delay_hours)
     if isinstance(delay, bool) or not isinstance(delay, int | float) or not 0 <= delay <= MAX_REPLY_DELAY_HOURS:
         raise ConfigError(f"reply_delay_hours 는 0~{MAX_REPLY_DELAY_HOURS} 시간 사이 숫자여야 합니다: {delay!r}")
+    ops_advice = raw.get("ops_advice", Config.ops_advice)
+    if not isinstance(ops_advice, bool):
+        raise ConfigError(f"ops_advice 는 true/false 여야 합니다: {ops_advice!r}")
     return Config(
         max_posts_per_day=max_posts,
         min_gap_hours=min_gap,
@@ -552,6 +557,7 @@ def parse_config(raw) -> Config:
         tone=tone,
         talk_topics=tuple(t.strip() for t in topics),
         reply_delay_hours=float(delay),
+        ops_advice=ops_advice,
     )
 
 

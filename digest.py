@@ -64,7 +64,7 @@ def held_reason(post: dict) -> str:
 
 
 def build_digest(store, cfg: Config, now: datetime, *, dry_run: bool, token_issued_at=None,
-                 exam: tuple[bool, str] | None = None) -> str:
+                 exam: tuple[bool, str] | None = None, products=None) -> str:
     today = rules.kst_date(now)
     tomorrow = today + timedelta(days=1)
     lines = [f"[일일 요약] {today:%Y-%m-%d} ({'연습 모드 DRY_RUN' if dry_run else '실제 발행'})", ""]
@@ -82,6 +82,11 @@ def build_digest(store, cfg: Config, now: datetime, *, dry_run: bool, token_issu
     if tok.level != "ok":
         lines.append(f"토큰 경고: {tok.message}")
     lines.append("")
+    if cfg.ops_advice and products is not None:
+        import ops_advice
+        notes = ops_advice.advice(store, cfg, products, now, stopped=bool(stop.get("active")))
+        if notes:
+            lines += notes + [""]
 
     # 내일 예정
     upcoming = sorted(
@@ -160,8 +165,14 @@ def main() -> int:
         print(f"오류: {e}")
         return 1
     notifier = make_notifier(secrets, dry_run=args.dry_run)
+    try:
+        from products import load_products
+        products = load_products()
+    except ConfigError as e:
+        log.warning(f"상품 목록을 읽지 못해 운영 알림을 건너뜁니다: {e}")
+        products = None
     send_digest(store, cfg, notifier, dry_run=dry_run(), token_issued_at=secrets.threads_token_issued_at,
-                exam=exam.exam_status(cfg))
+                exam=exam.exam_status(cfg), products=products)
     return 0
 
 
