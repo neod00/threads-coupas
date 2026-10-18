@@ -11,6 +11,11 @@ on:
     - cron: '0 14 * * *'     # 예비. 14:00 UTC = 23:00 KST
   workflow_dispatch:
     inputs:
+      account:
+        description: '계정 (openbrain 또는 accounts/ 아래 폴더 이름). 예약 실행은 저장소 변수 ACCOUNTS_JSON 의 계정 전체'
+        required: false
+        type: string
+        default: openbrain
       dry_run:
         description: '생성·검증만 하고 저장하지 않음 (LLM 비용 발생)'
         required: false
@@ -27,16 +32,21 @@ permissions:
   contents: read
 
 concurrency:
-  group: generate
+  group: generate-${{ github.event_name == 'workflow_dispatch' && inputs.account || 'scheduled' }}
   cancel-in-progress: false
 
 jobs:
   generate:
-    if: vars.AUTO_PUBLISH_DISABLED != 'true'
+    strategy:
+      fail-fast: false          # 한 계정이 실패해도 다른 계정은 계속 돈다
+      matrix:
+        account: ${{ fromJSON(github.event_name == 'workflow_dispatch' && format('["{0}"]', inputs.account) || vars.ACCOUNTS_JSON || '["openbrain"]') }}
     runs-on: ubuntu-latest
     timeout-minutes: 40      # Gemini 분당 한도 대기·재시도를 감안
     env:
-      AUTO_PUBLISH_DISABLED: ${{ vars.AUTO_PUBLISH_DISABLED }}
+      ACCOUNT: ${{ matrix.account == 'openbrain' && '' || matrix.account }}
+      SFX: ${{ matrix.account == 'openbrain' && '' || format('_{0}', matrix.account) }}
+      AUTO_PUBLISH_DISABLED: ${{ vars[format('AUTO_PUBLISH_DISABLED{0}', matrix.account == 'openbrain' && '' || format('_{0}', matrix.account))] }}
     steps:
       - uses: actions/checkout@v5
       - uses: actions/setup-python@v6
@@ -49,8 +59,8 @@ jobs:
           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
           OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
-          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
-          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+          SUPABASE_URL: ${{ secrets[format('SUPABASE_URL{0}', env.SFX)] }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets[format('SUPABASE_SERVICE_ROLE_KEY{0}', env.SFX)] }}
           TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
           TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
           INPUT_DRY_RUN: ${{ inputs.dry_run }}

@@ -15,9 +15,9 @@ from urllib.parse import urlparse
 import yaml
 
 from products import LINK_HOSTS, MAX_NOTE_CHARS, REVIEW_COPY_PATTERN, SAFETY_CLAIM_PATTERN
-from settings import PROJECT_ROOT, ConfigError
+from settings import ConfigError, account_path
 
-BUNDLES_PATH = PROJECT_ROOT / "data" / "bundles.yaml"
+BUNDLES_PATH = account_path("data", "bundles.yaml")
 ITEMS_PER_BUNDLE = 3
 MMDD = re.compile(r"(0[1-9]|1[0-2])-(0[1-9]|[12]\d|3[01])")
 

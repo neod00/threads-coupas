@@ -35,11 +35,10 @@ import calculator
 import guard
 from calculator import Tariff
 from products import Product
-from settings import PROJECT_ROOT, Config
+from settings import Config, account_path
 
 log = logging.getLogger("threads_coupas")
 
-PROMPTS_DIR = PROJECT_ROOT / "prompts"
 POST_TYPES = ("calc", "compare", "pick", "bundle", "talk", "tip")   # pick 2026-10-10, bundle·talk 2026-10-16
 NO_LINK_TYPES = ("tip", "talk")                     # 링크·대가성 문구가 없는 글
 VARIANTS = ("link_in_body", "link_in_reply")
@@ -123,7 +122,7 @@ CheckFn = Callable[[dict], list]     # 조립된 게시물 → 문제 목록 (�
 # ── 프롬프트 ─────────────────────────────────────────────────────────
 
 def _read_prompt(name: str) -> str:
-    return (PROMPTS_DIR / name).read_text(encoding="utf-8")
+    return account_path("prompts", name).read_text(encoding="utf-8")
 
 
 def system_prompt(cfg: Config, post_type: str, variant: str | None) -> str:

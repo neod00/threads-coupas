@@ -188,7 +188,7 @@ def test_reviewer_only_sees_guard_passed_posts(cfg, tariff, products):
 
 def test_system_prompt_has_rules_and_disclosure(cfg):
     system = reviewer.system_prompt(cfg)
-    assert "10. **자동 정지.**" in system and "1. **계정은 1개.**" in system     # PLAN 1장 전문
+    assert "10. **자동 정지.**" in system and "1. **한 번의 실행은 계정 1개.**" in system     # PLAN 1장 전문
     assert cfg.disclosure_text in system
     assert "문제를 찾는 것이 임무" in system
     assert "{" not in system.replace("{{", "")                              # 채워지지 않은 자리표시자 없음
@@ -200,7 +200,7 @@ def test_prompt_hash_changes_with_prompt_or_plan(cfg, tmp_path):
     prompt.write_text(reviewer.PROMPT_PATH.read_text(encoding="utf-8") + "\n추가 지시", encoding="utf-8")
     assert reviewer.prompt_hash(cfg, prompt_path=prompt) != base
     plan = tmp_path / "PLAN.md"
-    plan.write_text(reviewer.PLAN_PATH.read_text(encoding="utf-8").replace("계정은 1개.", "계정은 2개."), encoding="utf-8")
+    plan.write_text(reviewer.PLAN_PATH.read_text(encoding="utf-8").replace("한 번의 실행은 계정 1개.", "한 번의 실행은 계정 2개."), encoding="utf-8")
     assert reviewer.prompt_hash(cfg, plan_path=plan) != base
 
 

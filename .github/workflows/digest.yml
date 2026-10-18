@@ -9,6 +9,11 @@ name: Digest
 on:
   workflow_dispatch:
     inputs:
+      account:
+        description: '계정 (openbrain 또는 accounts/ 아래 폴더 이름). 예약 실행은 저장소 변수 ACCOUNTS_JSON 의 계정 전체'
+        required: false
+        type: string
+        default: openbrain
       dry_run:
         description: '텔레그램으로 보내지 않고 로그에만 출력'
         required: false
@@ -20,11 +25,17 @@ permissions:
 
 jobs:
   digest:
+    strategy:
+      fail-fast: false          # 한 계정이 실패해도 다른 계정은 계속 돈다
+      matrix:
+        account: ${{ fromJSON(github.event_name == 'workflow_dispatch' && format('["{0}"]', inputs.account) || vars.ACCOUNTS_JSON || '["openbrain"]') }}
     runs-on: ubuntu-latest
     timeout-minutes: 10
     env:
-      AUTO_PUBLISH_DISABLED: ${{ vars.AUTO_PUBLISH_DISABLED }}
-      DRY_RUN: ${{ vars.DRY_RUN == 'false' && 'false' || 'true' }}
+      ACCOUNT: ${{ matrix.account == 'openbrain' && '' || matrix.account }}
+      SFX: ${{ matrix.account == 'openbrain' && '' || format('_{0}', matrix.account) }}
+      AUTO_PUBLISH_DISABLED: ${{ vars[format('AUTO_PUBLISH_DISABLED{0}', matrix.account == 'openbrain' && '' || format('_{0}', matrix.account))] }}
+      DRY_RUN: ${{ vars[format('DRY_RUN{0}', matrix.account == 'openbrain' && '' || format('_{0}', matrix.account))] == 'false' && 'false' || 'true' }}
     steps:
       - uses: actions/checkout@v5
       - uses: actions/setup-python@v6
@@ -34,11 +45,11 @@ jobs:
       - run: pip install -r requirements.txt
       - name: Send digest
         env:
-          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
-          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+          SUPABASE_URL: ${{ secrets[format('SUPABASE_URL{0}', env.SFX)] }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets[format('SUPABASE_SERVICE_ROLE_KEY{0}', env.SFX)] }}
           TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
           TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
-          THREADS_TOKEN_ISSUED_AT: ${{ secrets.THREADS_TOKEN_ISSUED_AT }}
+          THREADS_TOKEN_ISSUED_AT: ${{ secrets[format('THREADS_TOKEN_ISSUED_AT{0}', env.SFX)] }}
           INPUT_DRY_RUN: ${{ inputs.dry_run }}
         run: |
           if [ "${INPUT_DRY_RUN}" = "true" ]; then

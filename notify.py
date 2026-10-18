@@ -8,6 +8,8 @@ import logging
 import urllib.parse
 import urllib.request
 
+from settings import account_label
+
 log = logging.getLogger("threads_coupas")
 
 TELEGRAM_LIMIT = 4000       # 한 메시지 최대 4096자. 여유를 둔다
@@ -41,7 +43,7 @@ class TelegramNotifier:
         self.timeout = timeout
 
     def send(self, text: str) -> None:
-        for chunk in split_message(text):
+        for chunk in split_message(account_label() + text):
             body = urllib.parse.urlencode({"chat_id": self.chat_id, "text": chunk,
                                            "disable_web_page_preview": "true"}).encode()
             with urllib.request.urlopen(urllib.request.Request(self.url, data=body), timeout=self.timeout) as resp:

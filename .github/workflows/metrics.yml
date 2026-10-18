@@ -8,6 +8,11 @@ on:
     - cron: '0 0 * * *'      # 00:00 UTC = 09:00 KST
   workflow_dispatch:
     inputs:
+      account:
+        description: '계정 (openbrain 또는 accounts/ 아래 폴더 이름). 예약 실행은 저장소 변수 ACCOUNTS_JSON 의 계정 전체'
+        required: false
+        type: string
+        default: openbrain
       dry_run:
         description: '수집만 하고 저장하지 않음'
         required: false
@@ -19,8 +24,15 @@ permissions:
 
 jobs:
   metrics:
+    strategy:
+      fail-fast: false          # 한 계정이 실패해도 다른 계정은 계속 돈다
+      matrix:
+        account: ${{ fromJSON(github.event_name == 'workflow_dispatch' && format('["{0}"]', inputs.account) || vars.ACCOUNTS_JSON || '["openbrain"]') }}
     runs-on: ubuntu-latest
     timeout-minutes: 10
+    env:
+      ACCOUNT: ${{ matrix.account == 'openbrain' && '' || matrix.account }}
+      SFX: ${{ matrix.account == 'openbrain' && '' || format('_{0}', matrix.account) }}
     steps:
       - uses: actions/checkout@v5
       - uses: actions/setup-python@v6
@@ -30,11 +42,11 @@ jobs:
       - run: pip install -r requirements.txt
       - name: Collect insights
         env:
-          THREADS_USER_ID: ${{ secrets.THREADS_USER_ID }}
-          THREADS_ACCESS_TOKEN: ${{ secrets.THREADS_ACCESS_TOKEN }}
-          THREADS_TOKEN_ISSUED_AT: ${{ secrets.THREADS_TOKEN_ISSUED_AT }}
-          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
-          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+          THREADS_USER_ID: ${{ secrets[format('THREADS_USER_ID{0}', env.SFX)] }}
+          THREADS_ACCESS_TOKEN: ${{ secrets[format('THREADS_ACCESS_TOKEN{0}', env.SFX)] }}
+          THREADS_TOKEN_ISSUED_AT: ${{ secrets[format('THREADS_TOKEN_ISSUED_AT{0}', env.SFX)] }}
+          SUPABASE_URL: ${{ secrets[format('SUPABASE_URL{0}', env.SFX)] }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets[format('SUPABASE_SERVICE_ROLE_KEY{0}', env.SFX)] }}
           INPUT_DRY_RUN: ${{ inputs.dry_run }}
         run: |
           if [ "${INPUT_DRY_RUN}" = "true" ]; then

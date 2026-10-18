@@ -51,19 +51,43 @@ def test_digest_cron_matches_config():
 def test_publish_safety_switches():
     wf = load("publish.yml")
     job = wf["jobs"]["publish"]
-    assert wf["concurrency"] == {"group": "publish", "cancel-in-progress": False}
-    assert load("cancel_post.yml")["concurrency"]["group"] == "publish"
-    assert job["if"] == "vars.AUTO_PUBLISH_DISABLED != 'true'"
-    assert job["env"]["AUTO_PUBLISH_DISABLED"] == "${{ vars.AUTO_PUBLISH_DISABLED }}"
-    # 규칙 9: 저장소 변수 DRY_RUN 이 정확히 'false' 이고 수동 dry_run 이 꺼졌을 때만 실제 발행, 그 밖에는 모두 'true'
-    assert job["env"]["DRY_RUN"] == "${{ (vars.DRY_RUN == 'false' && inputs.dry_run != true) && 'false' || 'true' }}"
+    assert "publish-" in wf["concurrency"]["group"] and wf["concurrency"]["cancel-in-progress"] is False
+    assert wf["concurrency"]["group"] == load("cancel_post.yml")["concurrency"]["group"]
+    # 킬 스위치는 계정별 변수 AUTO_PUBLISH_DISABLED(_계정)를 환경변수로 넘기고, 발행 코드가 정상 종료한다 (job if 는 matrix 를 못 쓴다)
+    assert "if" not in job
+    assert "vars[format('AUTO_PUBLISH_DISABLED{0}'" in job["env"]["AUTO_PUBLISH_DISABLED"]
+    # 규칙 9: 계정별 변수 DRY_RUN(_계정)이 정확히 'false' 이고 수동 dry_run 이 꺼졌을 때만 실제 발행, 그 밖에는 모두 'true'
+    dry = job["env"]["DRY_RUN"]
+    assert "vars[format('DRY_RUN{0}'" in dry and "== 'false'" in dry and "inputs.dry_run != true" in dry
+    assert dry.endswith("&& 'false' || 'true' }}")
     assert load("publish.yml")["on"]["workflow_dispatch"]["inputs"]["dry_run"]["default"] is True
 
 
 def test_generate_respects_kill_switch():
     job = load("generate.yml")["jobs"]["generate"]
-    assert job["if"] == "vars.AUTO_PUBLISH_DISABLED != 'true'"
-    assert job["env"]["AUTO_PUBLISH_DISABLED"] == "${{ vars.AUTO_PUBLISH_DISABLED }}"
+    assert "if" not in job
+    assert "vars[format('AUTO_PUBLISH_DISABLED{0}'" in job["env"]["AUTO_PUBLISH_DISABLED"]
+
+
+@pytest.mark.parametrize("name", WORKFLOWS)
+def test_every_job_runs_one_account_per_matrix_entry(name):
+    """계정 하나당 job 하나. 계정 전용 비밀값은 접미사 규칙(THREADS_USER_ID_SABOLKKA)으로만 고른다."""
+    wf = load(name)
+    assert wf["on"]["workflow_dispatch"]["inputs"]["account"]["default"] == "openbrain"
+    for job in wf["jobs"].values():
+        assert job["strategy"]["fail-fast"] is False
+        matrix = job["strategy"]["matrix"]["account"]
+        assert "fromJSON" in matrix and "vars.ACCOUNTS_JSON || '[\"openbrain\"]'" in matrix   # 예약 실행은 변수에 적은 계정들, 변수가 없으면 기존 계정만
+        assert job["env"]["ACCOUNT"] == "${{ matrix.account == 'openbrain' && '' || matrix.account }}"
+        assert job["env"]["SFX"] == "${{ matrix.account == 'openbrain' && '' || format('_{0}', matrix.account) }}"
+
+
+@pytest.mark.parametrize("name", WORKFLOWS)
+def test_account_only_secrets_never_use_plain_names(name):
+    text = (WF_DIR / name).read_text(encoding="utf-8")
+    from settings import ACCOUNT_ONLY_KEYS
+    for key in ACCOUNT_ONLY_KEYS - {"DRY_RUN", "AUTO_PUBLISH_DISABLED", "GH_DISPATCH_TOKEN"}:
+        assert f"secrets.{key}" not in text, f"{name}: {key} 는 secrets[format('{key}{{0}}', env.SFX)] 로 읽어야 한다"
 
 
 @pytest.mark.parametrize("name", WORKFLOWS)
@@ -71,7 +95,8 @@ def test_referenced_secrets_exist_in_env_example(name):
     # 오타 난 시크릿 이름은 빈 값으로 들어가 조용히 실패하므로 .env.example 의 키와 맞춰 본다
     example = (PROJECT_ROOT / ".env.example").read_text(encoding="utf-8")
     keys = set(re.findall(r"^([A-Z_]+)=", example, re.M))
-    used = set(re.findall(r"secrets\.([A-Z_]+)", (WF_DIR / name).read_text(encoding="utf-8")))
+    text = (WF_DIR / name).read_text(encoding="utf-8")
+    used = set(re.findall(r"secrets\.([A-Z_]+)", text)) | set(re.findall(r"secrets\[format\('([A-Z_]+)\{0\}'", text))
     assert used <= keys, used - keys
 
 
@@ -89,8 +114,8 @@ def test_supabase_publish_cron():
     assert "github_pat_" not in sql and "__GH_DISPATCH_TOKEN__" in sql
     # 실제 발행 여부는 여전히 저장소 변수 DRY_RUN·AUTO_PUBLISH_DISABLED 가 정한다
     job = load("publish.yml")["jobs"]["publish"]
-    assert "vars.DRY_RUN == 'false'" in job["env"]["DRY_RUN"]
-    assert job["if"] == "vars.AUTO_PUBLISH_DISABLED != 'true'"
+    assert "vars[format('DRY_RUN{0}'" in job["env"]["DRY_RUN"] and "== 'false'" in job["env"]["DRY_RUN"]
+    assert "if" not in job and "AUTO_PUBLISH_DISABLED" in job["env"]
 
 
 def test_supabase_generate_cron():
@@ -101,4 +126,14 @@ def test_supabase_generate_cron():
     assert '{"ref": "main", "inputs": {"dry_run": "false"}}' in sql
     assert "github_pat_" not in sql and "__GH_DISPATCH_TOKEN__" not in sql
     assert "gh_dispatch_token" in sql
-    assert load("generate.yml")["jobs"]["generate"]["if"] == "vars.AUTO_PUBLISH_DISABLED != 'true'"
+    assert "AUTO_PUBLISH_DISABLED" in load("generate.yml")["jobs"]["generate"]["env"]
+
+
+@pytest.mark.parametrize("name", ["publish", "generate", "digest"])
+def test_sabolkka_cron_wakes_only_its_own_account(name):
+    """새 Supabase 프로젝트의 예약은 account=sabolkka 로 깨우고, 나머지는 기존 계정용 SQL 과 같다."""
+    base = (PROJECT_ROOT / "db" / f"{name}_cron.sql").read_text(encoding="utf-8")
+    mine = (PROJECT_ROOT / "accounts" / "sabolkka" / "db" / f"{name}_cron.sql").read_text(encoding="utf-8")
+    assert '"inputs": {"account": "sabolkka", "dry_run": "false"}' in mine
+    assert "account" not in base.replace("accounts", "")
+    assert mine.split(chr(10), 1)[1].replace('"account": "sabolkka", ', "") == base

@@ -30,8 +30,47 @@ from typing import Mapping
 import yaml
 
 PROJECT_ROOT = Path(__file__).resolve().parent
-CONFIG_PATH = PROJECT_ROOT / "config.yaml"
-ENV_PATH = PROJECT_ROOT / ".env"
+
+
+class ConfigError(ValueError):
+    """설정·시크릿 값이 규칙을 어긴다. 발행 작업은 이 예외가 나면 시작하지 않는다."""
+
+
+# ── 계정 (PLAN 규칙 1, 2026-10-18 개정) ─────────────────────────────────
+# 한 번의 실행은 계정 하나만 다룬다. ACCOUNT 가 비어 있으면 기존 계정(프로젝트 루트의 config.yaml·data·prompts)이다.
+# ACCOUNT=sabolkka 면 accounts/sabolkka/config.yaml 이 반드시 있어야 하고, data·prompts 는 같은 폴더에 있는 파일만
+# 기존 것 대신 쓴다. ACCOUNT 는 .env 가 아니라 실제 환경변수로만 받는다 (설정 파일을 고르는 값이라 .env 보다 먼저 필요하다).
+ACCOUNT_NAME_RE = re.compile(r"[a-z][a-z0-9_]{1,30}")
+
+
+def _account_from_env() -> str:
+    name = (os.environ.get("ACCOUNT") or "").strip()
+    if name and not ACCOUNT_NAME_RE.fullmatch(name):
+        raise ConfigError(f"ACCOUNT 이름 형식 오류: 소문자·숫자·밑줄만, 소문자로 시작 ({name!r})")
+    return name
+
+
+ACCOUNT = _account_from_env()
+ACCOUNT_DIR = PROJECT_ROOT / "accounts" / ACCOUNT if ACCOUNT else PROJECT_ROOT
+
+
+def account_path(*parts: str) -> Path:
+    """계정 폴더에 같은 이름의 파일이 있으면 그 파일, 없으면 프로젝트 루트의 파일."""
+    if ACCOUNT and (ACCOUNT_DIR.joinpath(*parts)).exists():
+        return ACCOUNT_DIR.joinpath(*parts)
+    return PROJECT_ROOT.joinpath(*parts)
+
+
+def account_label() -> str:
+    """알림 맨 앞에 붙일 표시. 기존 계정은 비어 있어 메시지가 그대로다."""
+    return f"[{ACCOUNT}] " if ACCOUNT else ""
+
+
+# config.yaml 은 계정 간 폴백 없이 계정마다 따로 둔다 (다른 계정 설정으로 조용히 도는 일을 막는다).
+CONFIG_PATH = ACCOUNT_DIR / "config.yaml"
+# 계정 전용 .env.<계정> 이 있으면 그것을 먼저, 이어서 공용 .env 를 읽는다 (이미 있는 값은 덮어쓰지 않는다).
+ENV_PATH = PROJECT_ROOT / (f".env.{ACCOUNT}" if ACCOUNT else ".env")
+SHARED_ENV_PATH = PROJECT_ROOT / ".env"
 
 # 한국은 서머타임이 없어 고정 오프셋으로 충분하다 (Windows 에는 IANA 시간대 DB가 기본으로 없다).
 KST = timezone(timedelta(hours=9), "KST")
@@ -73,10 +112,6 @@ DISCLOSURE_REQUIRED_PHRASES = ("쿠팡 파트너스 활동의 일환으로", "�
 log = logging.getLogger("threads_coupas")
 
 
-class ConfigError(ValueError):
-    """설정·시크릿 값이 규칙을 어긴다. 발행 작업은 이 예외가 나면 시작하지 않는다."""
-
-
 # ── 환경변수 ─────────────────────────────────────────────────────────
 
 _dotenv_loaded = False
@@ -90,6 +125,25 @@ def load_env_file(path: Path = ENV_PATH) -> bool:
     return load_dotenv(path, override=False)
 
 
+# 계정마다 달라야 하는 값. 다른 계정 실행이 공용 .env 의 이 값을 물려받으면 엉뚱한 계정으로 발행되므로 읽지 않는다.
+ACCOUNT_ONLY_KEYS = frozenset({
+    "THREADS_USER_ID", "THREADS_ACCESS_TOKEN", "THREADS_TOKEN_ISSUED_AT",
+    "SUPABASE_URL", "SUPABASE_SERVICE_ROLE_KEY", "GH_DISPATCH_TOKEN",
+    "DRY_RUN", "AUTO_PUBLISH_DISABLED",
+})
+
+
+def load_shared_env_file(path: Path = SHARED_ENV_PATH) -> bool:
+    """공용 .env 에서 계정 전용 값을 뺀 나머지(LLM 키, 텔레그램, 앱 시크릿)만 읽는다. 이미 있는 값은 덮어쓰지 않는다."""
+    if not Path(path).is_file():
+        return False
+    from dotenv import dotenv_values
+    for key, value in dotenv_values(path).items():
+        if key not in ACCOUNT_ONLY_KEYS and value is not None:
+            os.environ.setdefault(key, value)
+    return True
+
+
 def _environ(env: Mapping[str, str] | None) -> Mapping[str, str]:
     """env 를 넘기면 그대로 쓰고(테스트용), 아니면 프로젝트 .env 를 한 번 읽은 뒤 os.environ 을 쓴다."""
     global _dotenv_loaded
@@ -97,6 +151,8 @@ def _environ(env: Mapping[str, str] | None) -> Mapping[str, str]:
         return env
     if not _dotenv_loaded:
         load_env_file()
+        if SHARED_ENV_PATH != ENV_PATH:
+            load_shared_env_file(SHARED_ENV_PATH)
         _dotenv_loaded = True
     return os.environ
 

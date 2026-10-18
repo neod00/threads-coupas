@@ -9,6 +9,11 @@ on:
     - cron: '0 12 * * 0'     # 일요일 12:00 UTC = 일요일 21:00 KST
   workflow_dispatch:
     inputs:
+      account:
+        description: '계정 (openbrain 또는 accounts/ 아래 폴더 이름). 예약 실행은 저장소 변수 ACCOUNTS_JSON 의 계정 전체'
+        required: false
+        type: string
+        default: openbrain
       dry_run:
         description: '텔레그램으로 보내지 않고 파일만 만듦'
         required: false
@@ -20,8 +25,15 @@ permissions:
 
 jobs:
   weekly:
+    strategy:
+      fail-fast: false          # 한 계정이 실패해도 다른 계정은 계속 돈다
+      matrix:
+        account: ${{ fromJSON(github.event_name == 'workflow_dispatch' && format('["{0}"]', inputs.account) || vars.ACCOUNTS_JSON || '["openbrain"]') }}
     runs-on: ubuntu-latest
     timeout-minutes: 15
+    env:
+      ACCOUNT: ${{ matrix.account == 'openbrain' && '' || matrix.account }}
+      SFX: ${{ matrix.account == 'openbrain' && '' || format('_{0}', matrix.account) }}
     steps:
       - uses: actions/checkout@v5
       - uses: actions/setup-python@v6
@@ -33,8 +45,8 @@ jobs:
         env:
           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
           OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
-          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
-          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+          SUPABASE_URL: ${{ secrets[format('SUPABASE_URL{0}', env.SFX)] }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets[format('SUPABASE_SERVICE_ROLE_KEY{0}', env.SFX)] }}
           TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
           TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
           INPUT_DRY_RUN: ${{ inputs.dry_run }}
@@ -47,7 +59,7 @@ jobs:
       - uses: actions/upload-artifact@v4
         if: always()
         with:
-          name: weekly-report
-          path: reports/*.md
+          name: weekly-report-${{ matrix.account }}
+          path: reports/**/*.md
           if-no-files-found: ignore
           retention-days: 90

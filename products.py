@@ -14,9 +14,9 @@ from dataclasses import dataclass
 from pathlib import Path
 from urllib.parse import urlparse
 
-from settings import PROJECT_ROOT, ConfigError
+from settings import ConfigError, account_path
 
-PRODUCTS_PATH = PROJECT_ROOT / "data" / "products.csv"
+PRODUCTS_PATH = account_path("data", "products.csv")
 COLUMNS = ("product_id", "name", "category", "power_w", "default_hours", "link", "note")
 OPTIONAL_COLUMNS = ("experience",)   # 2026-10-16: 진짜 후기 메모 (사용자 본인이 쓴 것만)
 MAX_EXPERIENCE_CHARS = 200

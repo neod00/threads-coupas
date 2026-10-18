@@ -30,11 +30,11 @@ from pathlib import Path
 
 import guard
 import rules
-from settings import KST, PROJECT_ROOT, Config
+from settings import ACCOUNT, KST, PROJECT_ROOT, Config
 
 log = logging.getLogger("threads_coupas")
 
-REPORTS_DIR = PROJECT_ROOT / "reports"
+REPORTS_DIR = PROJECT_ROOT / "reports" / ACCOUNT if ACCOUNT else PROJECT_ROOT / "reports"
 MIN_POSTS_FOR_REVIEW = 10
 DATA_SHORTAGE = "데이터 부족 — 이번 주 설정 유지"
 REVIEW_HEADER = "## AI 리뷰: 다음 주 바꿀 3가지"
@@ -275,7 +275,7 @@ def main() -> int:
     now = datetime.now(timezone.utc)
     report, context = build_report(store, cfg, now)
     text = f"{report}\n\n{ai_review(report, context, complete, absolute_rules())}\n"
-    REPORTS_DIR.mkdir(exist_ok=True)
+    REPORTS_DIR.mkdir(parents=True, exist_ok=True)
     path = REPORTS_DIR / f"weekly_{rules.kst_date(now)}.md"
     path.write_text(text, encoding="utf-8")
     log.info(f"저장: {path}")
