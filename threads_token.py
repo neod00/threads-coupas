@@ -2,7 +2,7 @@
 Threads 토큰 정리 도구. .env 에 받은 토큰을 넣고 실행하면 나머지를 채운다. 토큰 값은 화면에 출력하지 않는다.
 
   준비: .env 에 THREADS_ACCESS_TOKEN(대시보드·Graph API Explorer 에서 받은 토큰), THREADS_APP_SECRET 을 넣는다
-  실행: python threads_token.py
+  실행: python threads_token.py   (다른 계정은 먼저 $env:ACCOUNT="sabolkka" 로 계정을 고른다 → .env.sabolkka 를 읽고 쓴다)
 
   1) 단기 토큰(1시간)이면 장기 토큰(60일)으로 바꾼다 (grant_type=th_exchange_token, THREADS_API_NOTES.md)
      이미 장기 토큰이면 교환이 거절되므로 그대로 쓴다
@@ -13,7 +13,7 @@ from __future__ import annotations
 
 import sys
 
-from settings import ENV_PATH, today_kst
+from settings import ACCOUNT, ENV_PATH, SHARED_ENV_PATH, today_kst
 
 API = "https://graph.threads.net"
 
@@ -71,7 +71,11 @@ def main() -> int:
     if hasattr(sys.stdout, "reconfigure"):
         sys.stdout.reconfigure(encoding="utf-8")
     try:
-        for note in run(requests, dotenv_values(ENV_PATH)):
+        env = dict(dotenv_values(ENV_PATH))
+        if not env.get("THREADS_APP_SECRET") and SHARED_ENV_PATH != ENV_PATH:      # 앱 시크릿은 계정이 같이 쓴다
+            env["THREADS_APP_SECRET"] = dotenv_values(SHARED_ENV_PATH).get("THREADS_APP_SECRET") or ""
+        print(f"대상: {ENV_PATH.name} (계정 {ACCOUNT or '기존'})")
+        for note in run(requests, env):
             print("- " + note)
     except Exception as e:
         print(f"실패: {e}")
