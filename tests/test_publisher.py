@@ -475,8 +475,8 @@ def test_delayed_reply_waits_then_posts_only_after_delay(cfg, setup):
     assert saved["status"] == "published" and saved["threads_reply_id"] is None
     assert not any("reply_to_id" in c[1] for c in api.calls if c[0] == "create")
 
-    # 2시간 50분 뒤: 아직
-    _, api = run(setup, cfg, now=NOW + timedelta(hours=2, minutes=50))
+    # 2시간 40분 뒤: 아직 (15분 여유를 빼도 2시간 45분 전)
+    _, api = run(setup, cfg, now=NOW + timedelta(hours=2, minutes=40))
     assert not any("reply_to_id" in c[1] for c in api.calls if c[0] == "create")
     assert setup.store.get_post(post["id"])["threads_reply_id"] is None
 
@@ -486,6 +486,16 @@ def test_delayed_reply_waits_then_posts_only_after_delay(cfg, setup):
     assert creates == [{"media_type": "TEXT", "text": reply, "reply_to_id": saved["threads_media_id"],
                         "link_attachment": post["link_url"]}]
     assert setup.store.get_post(post["id"])["threads_reply_id"] == "m-c1"
+
+
+def test_delayed_reply_goes_out_in_run_a_few_seconds_before_the_delay(cfg, setup):
+    """30분 주기 실행이 정확히 3시간에서 몇 초 모자라도 답글을 단다 (15분 여유, 2026-10-24)."""
+    cfg = delayed(cfg)
+    post = setup.add(variant="link_in_reply", reply_text=f"{cfg.disclosure_text}\n\nx")
+    run(setup, cfg)
+    _, api = run(setup, cfg, now=NOW + timedelta(hours=3) - timedelta(seconds=20))
+    assert any("reply_to_id" in c[1] for c in api.calls if c[0] == "create")
+    assert setup.store.get_post(post["id"])["threads_reply_id"] is not None
 
 
 def test_default_zero_delay_posts_reply_immediately(cfg, setup):

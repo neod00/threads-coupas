@@ -146,11 +146,14 @@ def test_gemini_request_has_no_search_tool_and_forces_json(monkeypatch):
             return pytypes.SimpleNamespace(text='{"body": "x"}', candidates=[cand])
 
     class FakeClient:
-        def __init__(self, api_key):
+        def __init__(self, api_key, http_options=None):
+            captured["http_options"] = http_options
             self.models = FakeModels()
 
     monkeypatch.setattr(genai, "Client", FakeClient)
     assert llm_client._gemini_complete("k", G, "sys", "user", 0.3) == '{"body": "x"}'
+    # 응답 없이 멈춘 요청은 90초에 끊어 재시도로 넘긴다 (2026-10-23 40분 취소)
+    assert captured["http_options"].timeout == llm_client.GEMINI_TIMEOUT_MS == 90_000
     config = captured["config"]
     assert captured["model"] == G
     assert not config.tools
@@ -163,10 +166,15 @@ def test_gemini_truncation_detected(monkeypatch):
     from google import genai
 
     class FakeClient:
-        def __init__(self, api_key):
+        def __init__(self, api_key, http_options=None):
             self.models = pytypes.SimpleNamespace(generate_content=lambda **kw: pytypes.SimpleNamespace(
                 text='{"body": "잘린', candidates=[pytypes.SimpleNamespace(finish_reason="FinishReason.MAX_TOKENS")]))
 
     monkeypatch.setattr(genai, "Client", FakeClient)
     with pytest.raises(LLMError, match="끊겼습니다"):
         llm_client._gemini_complete("k", G, "s", "u", 0.3)
+
+
+def test_http_read_timeout_is_retryable():
+    import httpx
+    assert llm_client.is_retryable_error(httpx.ReadTimeout("The read operation timed out"))

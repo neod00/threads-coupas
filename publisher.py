@@ -323,11 +323,15 @@ def publish_post(post: dict, *, store, cfg: Config, api, link_checker, notifier,
             "threads_media_id": media_id, "reply": reply}
 
 
+# 발행기는 30분마다 돈다. 정확히 N시간 뒤 실행이 몇 초 모자라 건너뛰면 답글이 30분 늦어지므로 15분 여유를 둔다 (2026-10-24)
+REPLY_DUE_GRACE = timedelta(minutes=15)
+
+
 def reply_due(post: dict, cfg: Config, now: datetime) -> bool:
     """링크 답글을 달 때가 됐는지. cfg.reply_delay_hours 가 0 이면 항상 True (본문 직후)."""
     if cfg.reply_delay_hours <= 0 or not post.get("published_at"):
         return True
-    return now >= rules.as_dt(post["published_at"]) + timedelta(hours=cfg.reply_delay_hours)
+    return now >= rules.as_dt(post["published_at"]) + timedelta(hours=cfg.reply_delay_hours) - REPLY_DUE_GRACE
 
 
 def publish_reply(post: dict, *, store, api, notifier, dry_run: bool, sleep=time.sleep) -> str | None:

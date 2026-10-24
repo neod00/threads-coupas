@@ -82,8 +82,8 @@ digest_time_kst: "21:00"          # 일일 요약 발송 시각 (Step 5)
 test_start_date: 2026-10-19   # sabol.kka 첫 실제 발행일
 
 # 만들 글 유형 (calc, compare, pick, bundle, talk, tip 중에서). 2026-10-16 사용자 결정: 팁·계산·비교 글은 재미없어서 중단.
-# 링크 글 2자리 = 소개(pick)·시즌 모음(bundle, 이틀에 한 번), 링크 없는 2자리 = 참여형(talk).
-post_types: [pick, talk]
+# 링크 글 2자리 = 소개(pick)·시즌 모음(bundle, 시즌 중 이틀에 한 번 첫 자리), 링크 없는 1자리 = 참여형(talk). 2026-10-24 sabolkka bundle 다시 켬.
+post_types: [pick, bundle, talk]
 
 # ── 계정 전용 설정 (2026-10-18) ──────────────────────────────
 tone: casual                  # 친근한 반말. 생성 프롬프트는 accounts/sabolkka/prompts/, 검수 R11 은 이 값을 따른다
