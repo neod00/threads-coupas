@@ -26,6 +26,7 @@ log = logging.getLogger("threads_coupas")
 MAX_OUTPUT_TOKENS = 1024
 MAX_RETRIES = 1             # 대체 모델이 있을 때 일시 오류 재시도 횟수 (없으면 3)
 MAX_RATE_WAITS = 2          # 분당 한도에 걸렸을 때 기다렸다 재시도하는 횟수
+GEMINI_TIMEOUT_MS = 90_000  # 응답 없이 멈춘 요청을 끊는 시간 (제한이 없으면 40분 작업 제한에 걸려 취소됨, 2026-10-23)
 
 
 class LLMError(RuntimeError):
@@ -73,7 +74,7 @@ def _gemini_complete(api_key: str, model: str, system: str, user: str, temperatu
     from google import genai
     from google.genai import types
 
-    client = genai.Client(api_key=api_key)
+    client = genai.Client(api_key=api_key, http_options=types.HttpOptions(timeout=GEMINI_TIMEOUT_MS))
     resp = client.models.generate_content(
         model=model,
         contents=user,
