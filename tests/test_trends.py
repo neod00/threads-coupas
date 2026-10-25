@@ -84,7 +84,7 @@ def test_digest_uses_hot_keywords_when_given(cfg):
     now = datetime(2026, 10, 25, 12, tzinfo=timezone.utc)
     hot = [{"keyword": "건조기", "change": 0.35}, {"keyword": "제습기", "change": -0.05}]
     text = digest.build_digest(MemoryStore(), cfg, now, dry_run=True, hot=hot)
-    assert "오늘 둘러볼 검색어 (네이버 검색 상승순): 건조기(+35%), 제습기(-5%)" in text
+    assert "오늘 둘러볼 검색어 (네이버 검색량 상위 중 상승순): 건조기(+35%), 제습기(-5%)" in text
     assert "네이버" not in digest.build_digest(MemoryStore(), cfg, now, dry_run=True)   # 없으면 기본 목록
 
 
@@ -105,3 +105,13 @@ def test_legacy_devcenter_keys_use_old_endpoint():
     trends.naver_fetcher("id-1", "secret-1", http=types.SimpleNamespace(post=post), legacy=True)(["a"], TODAY, TODAY)
     assert sent["url"] == "https://openapi.naver.com/v1/datalab/search"
     assert sent["headers"] == {"X-Naver-Client-Id": "id-1", "X-Naver-Client-Secret": "secret-1"}
+
+
+def test_hot_keywords_prefer_rising_among_popular_ones():
+    """검색량이 가장 큰 물건이 줄어드는 중이면 맨 앞에 오지 않는다 (2026-10-25 에어프라이어 -19% 가 1위로 나온 문제)."""
+    data = {"big": [100] * (DAYS - 7) + [80] * 7,          # 검색량 최대, -20%
+            "mid": rising(40, 60),                          # 중간, +50%
+            "hot": rising(50, 70),                          # 중간, +40%
+            "tiny": rising(1, 3)}                           # 인기 아님 (+200% 라도 아래)
+    rows = trends.hot_keywords([f"{k}, 살까 말까" for k in data], lambda ks, s, e: {k: data[k] for k in ks}, TODAY)
+    assert [r["keyword"] for r in rows] == ["mid", "hot", "big"]

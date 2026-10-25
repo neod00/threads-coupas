@@ -89,7 +89,7 @@ def build_digest(store, cfg: Config, now: datetime, *, dry_run: bool, token_issu
     # 사람이 직접 둘러볼 검색어 (남의 글에 자동으로 답하지 않는다 — 규칙 6). 답해 줄 답글 목록은 텔레그램에 넣지 않는다
     if hot:
         import trends
-        lines.append("오늘 둘러볼 검색어 (네이버 검색 상승순): " + trends.describe(hot)
+        lines.append("오늘 둘러볼 검색어 (네이버 검색량 상위 중 상승순): " + trends.describe(hot)
                      + " — 남의 글 5개에 진심 답글 달기 (10분)")
     else:
         start = today.toordinal() * 3

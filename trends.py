@@ -92,7 +92,16 @@ def trend_scores(candidates: Sequence[str], fetch: FetchFn, today: date) -> list
 
 
 def hot_keywords(talk_topics: Sequence[str], fetch: FetchFn, today: date, n: int = 3) -> list[dict]:
-    return [r for r in trend_scores(candidates_from(talk_topics), fetch, today) if r["recent"] > 0][:n]
+    """검색량이 중앙값 이상인 물건 중 늘어나는 순으로 n 개. 모자라면 점수 순으로 채운다.
+    (점수 순만 쓰면 검색량이 큰 물건이 줄어드는 중이어도 맨 앞에 온다)"""
+    rows = [r for r in trend_scores(candidates_from(talk_topics), fetch, today) if r["recent"] > 0]
+    if not rows:
+        return []
+    recents = sorted(r["recent"] for r in rows)
+    median = recents[(len(recents) - 1) // 2]        # 짝수 개면 아래쪽 중앙값
+    popular = sorted((r for r in rows if r["recent"] >= median), key=lambda r: (-r["change"], r["keyword"]))[:n]
+    rest = [r for r in rows if r not in popular]
+    return (popular + rest)[:n]
 
 
 def describe(rows: Sequence[dict]) -> str:
