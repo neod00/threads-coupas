@@ -187,3 +187,76 @@ def test_generator_and_reviewer_see_used_posts(env, cfg, tariff, products):
     # 같은 실행에서 먼저 승인된 글도 다음 글의 반복 판정에 들어간다 (tip 2개가 서로 비교된다)
     assert seen["rev"][0] == [] and len(seen["rev"][-1]) == 3
     assert "최근에 올린 글" in seen["gen"][-1]             # 둘째 tip 은 첫째 tip 을 보고 쓴다
+
+
+# ── 생성 모델 혼잡(503) 회복 (2026-10-25) ─────────────────────────────────
+
+class Clock:
+    def __init__(self):
+        self.t, self.sleeps = 0.0, []
+
+    def __call__(self):
+        return self.t
+
+    def sleep(self, s):
+        self.sleeps.append(s)
+        self.t += s
+
+
+def flaky(fail_calls):
+    """처음 fail_calls 번은 503, 그 뒤로는 정상 응답."""
+    n = {"i": 0}
+
+    def complete(system, user, temperature):
+        n["i"] += 1
+        if n["i"] <= fail_calls:
+            raise Exception("503 UNAVAILABLE. This model is currently experiencing high demand.")
+        return smart_llm(system, user, temperature)
+    return complete
+
+
+def test_llm_outage_posts_are_regenerated_after_a_wait(env, cfg, tariff, products):
+    store, notifier = env
+    clock = Clock()
+    # 첫 글의 시도 3번이 모두 503 → held(LLM 실패), 나머지는 정상
+    result = pipeline.run_generate(store, cfg, tariff, products, complete=flaky(3), review_call=review(),
+                                   notifier=notifier, now=NOW, env={}, sleep=clock.sleep, clock=clock)
+    posts = result["posts"]
+    assert clock.sleeps == [300]                                       # 5분 기다렸다 한 번 더
+    assert sum(pipeline.llm_failed(p) for p in posts) == 1
+    approved = [p for p in posts if p["status"] == "approved"]
+    assert len(approved) == 4                                          # 빈 슬롯이 다시 채워졌다
+    assert len(store.posts) == 5                                       # 실패 기록도 남는다
+
+
+def test_llm_outage_gives_up_within_time_budget(env, cfg, tariff, products):
+    store, notifier = env
+    clock = Clock()
+    result = pipeline.run_generate(store, cfg, tariff, products, complete=flaky(10_000), review_call=review(),
+                                   notifier=notifier, now=NOW, env={}, sleep=clock.sleep, clock=clock)
+    assert clock.sleeps == [300, 600]                                  # 두 번까지만
+    assert all(pipeline.llm_failed(p) for p in result["posts"])
+    assert not autostop.is_stopped(store)                              # API 오류 held 는 자동 정지 비율에서 빠진다 (규칙 10)
+
+
+def test_no_retry_when_time_budget_is_used_up(env, cfg, tariff, products):
+    store, notifier = env
+    clock = Clock()
+    clock.t = -1e9                                                     # 시작 시각
+    slow = flaky(10_000)
+
+    def complete(*a):
+        clock.t += pipeline.GENERATE_TIME_BUDGET                       # 한 번 호출에 예산을 다 씀
+        return slow(*a)
+    clock.t = 0
+    pipeline.run_generate(store, cfg, tariff, products, complete=complete, review_call=review(),
+                          notifier=notifier, now=NOW, env={}, sleep=clock.sleep, clock=clock)
+    assert clock.sleeps == []
+
+
+def test_rule_problems_are_not_retried(env, cfg, tariff, products):
+    store, notifier = env
+    clock = Clock()
+    result = pipeline.run_generate(store, cfg, tariff, products, complete=smart_llm, review_call=review("uncertain"),
+                                   notifier=notifier, now=NOW, env={}, sleep=clock.sleep, clock=clock)
+    assert clock.sleeps == [] and not any(pipeline.llm_failed(p) for p in result["posts"])

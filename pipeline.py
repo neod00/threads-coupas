@@ -17,6 +17,7 @@ import argparse
 import json
 import logging
 import sys
+import time
 from datetime import datetime, timedelta, timezone
 
 import autostop
@@ -31,6 +32,16 @@ log = logging.getLogger("threads_coupas")
 USED_STATUSES = ("approved", "published")    # 주제 돌려 쓰기·반복 판정에 넣는 글
 BUNDLE_GAP_HOURS = 36                         # 모음 글은 이틀에 한 번 (같은 테마가 연달아 나오지 않게)
 HOOK_HISTORY_DAYS = 7
+# 생성 모델 혼잡(503)으로만 보류된 글은 이만큼(초) 기다렸다 다시 만든다 (2026-10-25: Gemini 503 가 몇 시간 이어져 하루 슬롯이 비었다)
+LLM_RETRY_WAITS = (300, 600)
+GENERATE_TIME_BUDGET = 30 * 60      # generate.yml 제한 40분 안에서 회복 단계를 시작할 수 있는 시간
+
+
+def llm_failed(post: dict) -> bool:
+    """모든 시도가 LLM 호출 실패로 끝나 held 된 글 (규칙·검수 문제가 아니라 API 오류)."""
+    attempts = (post.get("guard_log") or {}).get("attempts") or []
+    return (post.get("status") == "held" and bool(attempts)
+            and all(any(str(p).startswith("LLM 호출 실패") for p in a.get("problems") or []) for a in attempts))
 
 
 def plan_day(posts, cfg: Config, day, has_compare_pairs: bool, has_picks: bool = False, has_calc: bool = True,
@@ -80,7 +91,8 @@ def bundle_available(bundles, used, day, now: datetime) -> bool:
 
 
 def run_generate(store, cfg: Config, tariff, products, *, complete, review_call, notifier, now: datetime,
-                 env=None, variant: str = "link_in_reply", save: bool = True, bundles=None) -> dict:
+                 env=None, variant: str = "link_in_reply", save: bool = True, bundles=None,
+                 sleep=time.sleep, clock=time.monotonic) -> dict:
     from settings import auto_publish_disabled
 
     if auto_publish_disabled(env):
@@ -109,45 +121,71 @@ def run_generate(store, cfg: Config, tariff, products, *, complete, review_call,
     rev = reviewer_mod.Reviewer(cfg, review_call)
 
     made = []
-    for i, post_type in enumerate(types):
-        # 가장 오래 안 쓴 (상품 × 사용시간) 조합·팁 주제를 고른다 (같은 숫자의 글이 되풀이되면 검수 R9 에 막힌다)
-        subject = generator.pick_subject(products, post_type, tomorrow, used, offset=i, bundles=bundles,
-                                         talk_topics=cfg.talk_topics)
-        picked, topic, bundle = subject["picked"], subject["tip_topic"], subject.get("bundle")
-        if post_type == "tip":
-            # tip 은 예시 계산에 쓸 상품 1개를 고른다 (링크는 붙이지 않음)
-            picked = generator.pick_subject(products, "calc", tomorrow, used, offset=i)["picked"]
-        if post_type == "bundle":
-            rows = [{"name": it.name, "note": it.note, "link": bundle.link} for it in bundle.items]
-        else:
-            rows = reviewer_mod.product_rows(picked) if post_type not in generator.NO_LINK_TYPES else []
-        newest_first = [p["text"] for p in reversed(used)]
-        check = reviewer_mod.make_check(rev, rows, newest_first[:reviewer_mod.RECENT_POSTS_LIMIT])
-        same_type = [p["text"] for p in reversed(used) if p["type"] == post_type]
-        post = generator.generate_post(post_type, picked, tariff, cfg, complete, variant=variant, tip_topic=topic,
-                                       checks=[check], history=history + made, now=now,
-                                       hours=subject["hours"], recent_texts=same_type, bundle=bundle)
-        if post["status"] == "approved":
-            used.append(post)
-
-        if post["status"] == "approved":
-            # 다음 날 슬롯만 본다 (20:00 에 돌아도 오늘 21:30 슬롯에 넣지 않는다)
-            slot = rules.next_slot(occupying + made, post["has_link"], cfg, after=day_start, horizon_days=0)
-            if slot is None:
-                post["status"] = "held"
-                post["guard_log"]["attempts"].append({"attempt": "schedule", "hook_style": post["hook_style"],
-                                                      "problems": [f"{tomorrow} 에 규칙에 맞는 빈 슬롯이 없습니다"]})
-            else:
-                post["scheduled_at"] = slot.astimezone(timezone.utc).isoformat()
-        made.append(post)
-        if save:
-            store.insert_post(post)
-            autostop.record_review_status(store, notifier, (post.get("review_result") or {}).get("status"))
-        log.info(f"[생성] {post_type} → {post['status']} {post.get('scheduled_at') or ''}")
+    started, offset = clock(), 0
+    queue = list(types)
+    for round_no in range(len(LLM_RETRY_WAITS) + 1):
+        if round_no:
+            wait = LLM_RETRY_WAITS[round_no - 1]
+            if clock() - started + wait > GENERATE_TIME_BUDGET:
+                log.warning(f"[생성] 생성 모델 오류로 빈 슬롯 {len(queue)}개 — 시간 제한 때문에 다시 시도하지 않습니다")
+                break
+            log.warning(f"[생성] 생성 모델 오류로 보류된 {len(queue)}개를 {wait // 60}분 뒤 다시 만듭니다 ({round_no}/{len(LLM_RETRY_WAITS)})")
+            sleep(wait)
+        failed = []
+        for post_type in queue:
+            post = _generate_one(post_type, offset, products=products, tariff=tariff, cfg=cfg, complete=complete,
+                                 variant=variant, used=used, history=history, made=made, rev=rev, bundles=bundles,
+                                 tomorrow=tomorrow, day_start=day_start, occupying=occupying, now=now)
+            offset += 1
+            made.append(post)
+            if save:
+                store.insert_post(post)
+                autostop.record_review_status(store, notifier, (post.get("review_result") or {}).get("status"))
+            log.info(f"[생성] {post_type} → {post['status']} {post.get('scheduled_at') or ''}")
+            if llm_failed(post):
+                failed.append(post_type)
+        queue = failed
+        if not queue:
+            break
 
     if save:
         autostop.check_held_ratio(store, notifier, made)
     return {"action": "generated", "posts": made}
+
+
+def _generate_one(post_type, i, *, products, tariff, cfg, complete, variant, used, history, made, rev, bundles,
+                  tomorrow, day_start, occupying, now) -> dict:
+    """글 1개 생성 → 가드·검수 → approved 면 다음 날 빈 슬롯 배정."""
+    # 가장 오래 안 쓴 (상품 × 사용시간) 조합·팁 주제를 고른다 (같은 숫자의 글이 되풀이되면 검수 R9 에 막힌다)
+    subject = generator.pick_subject(products, post_type, tomorrow, used, offset=i, bundles=bundles,
+                                     talk_topics=cfg.talk_topics)
+    picked, topic, bundle = subject["picked"], subject["tip_topic"], subject.get("bundle")
+    if post_type == "tip":
+        # tip 은 예시 계산에 쓸 상품 1개를 고른다 (링크는 붙이지 않음)
+        picked = generator.pick_subject(products, "calc", tomorrow, used, offset=i)["picked"]
+    if post_type == "bundle":
+        rows = [{"name": it.name, "note": it.note, "link": bundle.link} for it in bundle.items]
+    else:
+        rows = reviewer_mod.product_rows(picked) if post_type not in generator.NO_LINK_TYPES else []
+    newest_first = [p["text"] for p in reversed(used)]
+    check = reviewer_mod.make_check(rev, rows, newest_first[:reviewer_mod.RECENT_POSTS_LIMIT])
+    same_type = [p["text"] for p in reversed(used) if p["type"] == post_type]
+    post = generator.generate_post(post_type, picked, tariff, cfg, complete, variant=variant, tip_topic=topic,
+                                   checks=[check], history=history + made, now=now,
+                                   hours=subject["hours"], recent_texts=same_type, bundle=bundle)
+    if post["status"] == "approved":
+        used.append(post)
+
+    if post["status"] == "approved":
+        # 다음 날 슬롯만 본다 (20:00 에 돌아도 오늘 21:30 슬롯에 넣지 않는다)
+        slot = rules.next_slot(occupying + made, post["has_link"], cfg, after=day_start, horizon_days=0)
+        if slot is None:
+            post["status"] = "held"
+            post["guard_log"]["attempts"].append({"attempt": "schedule", "hook_style": post["hook_style"],
+                                                  "problems": [f"{tomorrow} 에 규칙에 맞는 빈 슬롯이 없습니다"]})
+        else:
+            post["scheduled_at"] = slot.astimezone(timezone.utc).isoformat()
+    return post
 
 
 def main(argv=None) -> int:
