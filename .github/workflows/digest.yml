@@ -49,6 +49,8 @@ jobs:
           SUPABASE_SERVICE_ROLE_KEY: ${{ secrets[format('SUPABASE_SERVICE_ROLE_KEY{0}', env.SFX)] }}
           TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
           TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+          NAVER_CLIENT_ID: ${{ secrets.NAVER_CLIENT_ID }}
+          NAVER_CLIENT_SECRET: ${{ secrets.NAVER_CLIENT_SECRET }}
           THREADS_TOKEN_ISSUED_AT: ${{ secrets[format('THREADS_TOKEN_ISSUED_AT{0}', env.SFX)] }}
           INPUT_DRY_RUN: ${{ inputs.dry_run }}
         run: |

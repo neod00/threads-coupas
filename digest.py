@@ -21,7 +21,7 @@ from datetime import datetime, timedelta, timezone
 
 import autostop
 import rules
-from settings import Config, token_status
+from settings import KST, Config, token_status
 
 log = logging.getLogger("threads_coupas")
 
@@ -61,7 +61,7 @@ def held_reason(post: dict) -> str:
 
 
 def build_digest(store, cfg: Config, now: datetime, *, dry_run: bool, token_issued_at=None,
-                 exam: tuple[bool, str] | None = None, products=None) -> str:
+                 exam: tuple[bool, str] | None = None, products=None, hot: list[dict] | None = None) -> str:
     today = rules.kst_date(now)
     tomorrow = today + timedelta(days=1)
     lines = [f"[일일 요약] {today:%Y-%m-%d} ({'연습 모드 DRY_RUN' if dry_run else '실제 발행'})"]
@@ -86,9 +86,14 @@ def build_digest(store, cfg: Config, now: datetime, *, dry_run: bool, token_issu
             lines += notes + [""]
 
     # 사람이 직접 둘러볼 검색어 (남의 글에 자동으로 답하지 않는다 — 규칙 6). 답해 줄 답글 목록은 텔레그램에 넣지 않는다
-    start = today.toordinal() * 3
-    words = [BROWSE_KEYWORDS[(start + i) % len(BROWSE_KEYWORDS)] for i in range(3)]
-    lines.append("오늘 둘러볼 검색어: " + ", ".join(words) + " — 남의 글 5개에 진심 답글 달기 (10분)")
+    if hot:
+        import trends
+        lines.append("오늘 둘러볼 검색어 (네이버 검색 상승순): " + trends.describe(hot)
+                     + " — 남의 글 5개에 진심 답글 달기 (10분)")
+    else:
+        start = today.toordinal() * 3
+        words = [BROWSE_KEYWORDS[(start + i) % len(BROWSE_KEYWORDS)] for i in range(3)]
+        lines.append("오늘 둘러볼 검색어: " + ", ".join(words) + " — 남의 글 5개에 진심 답글 달기 (10분)")
     lines.append("")
 
     # 발행 현황은 개수만. 개별 글은 모니터링 화면에서 본다
@@ -139,8 +144,16 @@ def main() -> int:
     except ConfigError as e:
         log.warning(f"상품 목록을 읽지 못해 운영 알림을 건너뜁니다: {e}")
         products = None
+    hot = None
+    if secrets.naver_client_id and secrets.naver_client_secret and cfg.talk_topics:
+        import trends
+        try:
+            hot = trends.hot_keywords(cfg.talk_topics, trends.naver_fetcher(secrets.naver_client_id, secrets.naver_client_secret),
+                                      datetime.now(KST).date())
+        except Exception as e:     # 검색어는 덤이다. 실패해도 요약은 보낸다
+            log.warning(f"네이버 검색 트렌드를 읽지 못해 기본 검색어를 씁니다: {e}")
     send_digest(store, cfg, notifier, dry_run=dry_run(), token_issued_at=secrets.threads_token_issued_at,
-                exam=exam.exam_status(cfg), products=products)
+                exam=exam.exam_status(cfg), products=products, hot=hot)
     return 0
 
 

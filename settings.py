@@ -207,8 +207,11 @@ _SECRET_ENV = {
     "supabase_service_role_key": "SUPABASE_SERVICE_ROLE_KEY",
     "telegram_bot_token": "TELEGRAM_BOT_TOKEN",
     "telegram_chat_id": "TELEGRAM_CHAT_ID",
+    "naver_client_id": "NAVER_CLIENT_ID",
+    "naver_client_secret": "NAVER_CLIENT_SECRET",
 }
-_OPTIONAL_SECRETS = {"openai_api_key"}
+# 선택 항목: 없어도 실행된다 (네이버 키가 없으면 일일 요약 검색어가 예전처럼 정해진 목록에서 돈다)
+_OPTIONAL_SECRETS = {"openai_api_key", "naver_client_id", "naver_client_secret"}
 
 
 @dataclass(frozen=True)
@@ -225,6 +228,8 @@ class Secrets:
     supabase_service_role_key: str | None = field(default=None, repr=False)
     telegram_bot_token: str | None = field(default=None, repr=False)
     telegram_chat_id: str | None = None
+    naver_client_id: str | None = None
+    naver_client_secret: str | None = field(default=None, repr=False)
 
     def api_key_for(self, provider: str) -> str | None:
         return {"google": self.gemini_api_key, "openai": self.openai_api_key,
