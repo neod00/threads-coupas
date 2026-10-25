@@ -1,11 +1,12 @@
 """
 일일 요약 (PLAN v2 Step 5). 매일 21:00 KST 텔레그램으로 보낸다. 읽지 않아도 발행은 진행된다.
 
-담는 것
-  - 내일 발행 예정 글 (post_id·시각·훅·검수 결과) + 취소 방법
-  - 최근 7일 동안 처리되지 않은 held 글과 보류 사유 (uncertain 항목·검수 사유·가드·링크 확인 사유)
-  - 오늘 발행 글과 조회수
-  - 자동 정지 여부, 검수자 시험지 상태, DRY_RUN, 토큰 만료 경고
+담는 것 (2026-10-25 축약: 개수만, 문제가 있을 때만 자세히)
+  - 상태: 문제가 없으면 "상태: 정상" 한 줄. 자동 정지·시험지 불합격·토큰 경고가 있을 때만 자세히
+  - 운영 알림 (상품 링크 보충·발행 수 늘리기, ops_advice)
+  - 오늘 둘러볼 검색어
+  - 내일 발행 예정·오늘 발행 개수, 최근 36시간 보류(held) 개수 (보류는 있을 때만)
+  개별 글·사유·post_id·답해 줄 답글은 모니터링 화면(monitor_app.py)에서 본다
 
 실행:
   python digest.py            # 텔레그램 발송
@@ -20,16 +21,12 @@ from datetime import datetime, timedelta, timezone
 
 import autostop
 import rules
-from settings import KST, Config, token_status
+from settings import Config, token_status
 
 log = logging.getLogger("threads_coupas")
 
-CANCEL_HELP = ("취소 방법: GitHub 앱 → 저장소 → Actions → 'Cancel post' → Run workflow → post_id 입력 "
-               "(또는 모니터링 화면의 취소 버튼)")
-TYPE_LABEL = {"calc": "계산", "compare": "비교", "pick": "소개", "bundle": "모음", "talk": "참여", "tip": "팁"}
-HELD_WINDOW_DAYS = 7
-INBOX_HOURS = 36            # 이 시간 안에 달린 남의 답글을 '답해 줄 답글'로 보여 준다
-# 사람이 직접 둘러볼 검색어 (D, 2026-10-16). 하루 3개씩 돌린다. 남의 글에 자동으로 답하지 않는다 (규칙 6)
+HELD_WINDOW_HOURS = 36      # 발행 직전 검사에서 held 된 글은 전날 생성됐을 수 있어 하루보다 길게 본다 (자세한 건 모니터링 화면)
+# 사람이 직접 둘러볼 검색어 (2026-10-16). 하루 3개씩 돌린다. 남의 글에 자동으로 답하지 않는다 (규칙 6)
 BROWSE_KEYWORDS = ("자취 겨울템", "강아지 산책", "고양이 집사", "무드등", "겨울 이불", "전기장판", "붕어빵",
                    "빼빼로데이", "수능 선물", "크리스마스 선물", "집들이 선물", "반려동물 옷", "가습기", "자취 요리")
 
@@ -67,20 +64,20 @@ def build_digest(store, cfg: Config, now: datetime, *, dry_run: bool, token_issu
                  exam: tuple[bool, str] | None = None, products=None) -> str:
     today = rules.kst_date(now)
     tomorrow = today + timedelta(days=1)
-    lines = [f"[일일 요약] {today:%Y-%m-%d} ({'연습 모드 DRY_RUN' if dry_run else '실제 발행'})", ""]
+    lines = [f"[일일 요약] {today:%Y-%m-%d} ({'연습 모드 DRY_RUN' if dry_run else '실제 발행'})"]
 
-    # 상태
+    # 상태: 문제가 있을 때만 자세히
     stop = autostop.status(store)
+    problems = []
     if stop.get("active"):
-        lines.append("자동 정지: 정지 중 — 발행 안 됨")
-        lines += [f"  - {r['reason']}" for r in stop.get("reasons", [])]
-    else:
-        lines.append("자동 정지: 없음")
-    if exam is not None:
-        lines.append(f"검수자 시험지: {'합격' if exam[0] else '불합격 — 발행 불가'} ({exam[1]})")
+        problems.append("자동 정지: 정지 중 — 발행 안 됨")
+        problems += [f"  - {r['reason']}" for r in stop.get("reasons", [])]
+    if exam is not None and not exam[0]:
+        problems.append(f"검수자 시험지: 불합격 — 발행 불가 ({exam[1]})")
     tok = token_status(token_issued_at, today)
     if tok.level != "ok":
-        lines.append(f"토큰 경고: {tok.message}")
+        problems.append(f"토큰 경고: {tok.message}")
+    lines += problems or ["상태: 정상"]
     lines.append("")
     if cfg.ops_advice and products is not None:
         import ops_advice
@@ -88,54 +85,25 @@ def build_digest(store, cfg: Config, now: datetime, *, dry_run: bool, token_issu
         if notes:
             lines += notes + [""]
 
-    # 내일 예정
-    upcoming = sorted(
-        (p for p in store.list_posts(["approved"]) if rules.post_time(p) and rules.kst_date(rules.post_time(p)) == tomorrow),
-        key=rules.post_time,
-    )
-    lines.append(f"내일({tomorrow:%m-%d}) 발행 예정 {len(upcoming)}개")
-    for p in upcoming:
-        t = rules.post_time(p).astimezone(KST)
-        link = "링크" if p.get("has_link") else "링크 없음"
-        lines.append(f"- {t:%H:%M} {TYPE_LABEL.get(p['type'], p['type'])}·{p.get('hook_style')}·{link} | {_hook(p)}")
-        lines.append(f"  {review_summary(p)}")
-        lines.append(f"  post_id: {p['id']}")
-    if upcoming:
-        lines.append(CANCEL_HELP)
-    lines.append("")
-
-    # 보류: 처리(수동 승인·폐기)되지 않은 held 글. 발행 직전 검사에서 held 된 글은 전날 생성됐을 수 있어 7일을 본다
-    since = (now - timedelta(days=HELD_WINDOW_DAYS)).astimezone(timezone.utc).isoformat()
-    held = store.list_posts(["held"], since=since)
-    lines.append(f"보류(held) {len(held)}개 — 발행 안 함")
-    for p in held:
-        lines.append(f"- {TYPE_LABEL.get(p['type'], p['type'])} | {_hook(p) or '(초안 없음)'}")
-        lines.append(f"  사유: {held_reason(p)}")
-        lines.append(f"  post_id: {p['id']}")
-    lines.append("")
-
-    # D. 사람이 하는 10분 소통 (자동화하지 않는다 — 규칙 6)
-    inbox = [r for r in (store.get_state("reply_inbox", []) or [])
-             if (t := rules.as_dt(r.get("at"))) is None or t >= now - timedelta(hours=INBOX_HOURS)]
-    lines.append(f"답해 줄 답글 {len(inbox)}개 (스레드 앱에서 직접 답해 주세요)")
-    for r in inbox[-10:]:
-        lines.append(f"- @{r.get('username') or '?'}: {r.get('text') or ''}")
-        if r.get("permalink"):
-            lines.append(f"  {r['permalink']}")
+    # 사람이 직접 둘러볼 검색어 (남의 글에 자동으로 답하지 않는다 — 규칙 6). 답해 줄 답글 목록은 텔레그램에 넣지 않는다
     start = today.toordinal() * 3
     words = [BROWSE_KEYWORDS[(start + i) % len(BROWSE_KEYWORDS)] for i in range(3)]
     lines.append("오늘 둘러볼 검색어: " + ", ".join(words) + " — 남의 글 5개에 진심 답글 달기 (10분)")
     lines.append("")
 
-    # 오늘 발행
+    # 발행 현황은 개수만. 개별 글은 모니터링 화면에서 본다
+    upcoming = [p for p in store.list_posts(["approved"])
+                if rules.post_time(p) and rules.kst_date(rules.post_time(p)) == tomorrow]
     published = [p for p in store.list_posts(["published"])
                  if p.get("published_at") and rules.kst_date(rules.as_dt(p["published_at"])) == today]
-    metrics = store.latest_metrics([p["threads_media_id"] for p in published if p.get("threads_media_id")])
+    lines.append(f"내일({tomorrow:%m-%d}) 발행 예정 {len(upcoming)}개")
     lines.append(f"오늘 발행 {len(published)}개")
-    for p in published:
-        m = metrics.get(p.get("threads_media_id"))
-        views = f"조회 {m['views']}" if m and m.get("views") is not None else "조회수 수집 전"
-        lines.append(f"- {rules.as_dt(p['published_at']).astimezone(KST):%H:%M} {_hook(p)} | {views}")
+
+    # 보류는 있을 때만, 개수만
+    since = (now - timedelta(hours=HELD_WINDOW_HOURS)).astimezone(timezone.utc).isoformat()
+    held = store.list_posts(["held"], since=since)
+    if held:
+        lines.append(f"보류(held) {len(held)}개 — 발행 안 함 (사유는 모니터링 화면)")
     return "\n".join(lines).rstrip()
 
 

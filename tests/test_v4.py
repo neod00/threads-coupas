@@ -175,7 +175,7 @@ class ConvApi:
         return self.replies
 
 
-def test_reply_inbox_collects_others_replies_and_digest_lists_them(cfg):
+def test_reply_inbox_collects_others_replies_but_digest_omits_them(cfg):
     store = MemoryStore()
     published = {"id": "p1", "type": "pick", "status": "published", "threads_media_id": "m1", "text": "훅\n\n본문",
                  "published_at": (NOW - timedelta(hours=3)).isoformat(), "created_at": (NOW - timedelta(hours=20)).isoformat()}
@@ -187,7 +187,7 @@ def test_reply_inbox_collects_others_replies_and_digest_lists_them(cfg):
     inbox = store.get_state(watch_replies.INBOX_KEY)
     assert [r["reply_id"] for r in inbox] == ["r1"]                  # 내 답글은 빼고, 자동으로 답하지 않는다
     text = digest.build_digest(store, cfg, NOW, dry_run=False)
-    assert "답해 줄 답글 1개" in text and "@kim: 저는 2번이요" in text and "https://www.threads.com/@kim/post/abc" in text
+    assert "답해 줄 답글" not in text and "@kim" not in text          # 답글 목록은 텔레그램에 넣지 않는다 (2026-10-25)
     assert "오늘 둘러볼 검색어:" in text
 
 

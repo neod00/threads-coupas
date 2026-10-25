@@ -50,7 +50,7 @@ def world(make_post):
                                                          "problems": ["[G3] 본문에 입력·계산 데이터에 없는 숫자: 7"]}]},
                                 created_at=(NOW - timedelta(hours=3)).astimezone(timezone.utc).isoformat()),
         "old_held": make_post(status="held", created_at=(NOW - timedelta(days=8)).astimezone(timezone.utc).isoformat()),
-        "link_held": make_post(status="held", created_at=(NOW - timedelta(days=2)).astimezone(timezone.utc).isoformat(),
+        "link_held": make_post(status="held", created_at=(NOW - timedelta(hours=30)).astimezone(timezone.utc).isoformat(),
                                guard_log={"attempts": [{"attempt": "publish", "stage": "link", "hook_style": "result",
                                                         "problems": ["링크 최종 응답이 정상이 아닙니다: HTTP 404 (www.coupang.com)"]}]}),
         "published": make_post(status="published", published_at=kst(2, "18:40"), threads_media_id="m-1"),
@@ -69,7 +69,7 @@ def build(store, cfg, **kw):
 
 # ── 8장: 일일 요약 발송 ─────────────────────────────────────────────────────
 
-def test_digest_is_sent_with_all_sections(cfg, world):
+def test_digest_is_sent_with_counts_only(cfg, world):
     store, posts = world
     notifier = CollectingNotifier()
     text = digest.send_digest(store, cfg, notifier, NOW, dry_run=True, token_issued_at=date(2026, 10, 25),
@@ -77,37 +77,43 @@ def test_digest_is_sent_with_all_sections(cfg, world):
     assert notifier.sent == [text]
     assert store.events[-1]["kind"] == "digest_sent"
 
-    # 내일 예정: post_id·시각·훅·검수 결과 + 취소 방법
+    # 발행 현황·보류는 개수만 (최근 36시간 보류: uncertain·guard_held·link_held)
     assert "내일(11-03) 발행 예정 2개" in text
-    assert f"post_id: {posts['tomorrow']['id']}" in text
-    assert "08:10 계산·result·링크 | 2,000W 히터 하루 4시간이면 한 달 240kWh" in text
-    assert "12:30 팁" in text and "링크 없음" in text
-    assert "검수 통과 (R1~R12 pass)" in text
-    assert "Cancel post" in text
-    # 내일이 아닌 글, 취소된 글은 목록에 없다
-    assert posts["later"]["id"] not in text and posts["cancelled"]["id"] not in text
-
-    # held: 최근 7일, 사유 포함 (발행 직전 링크 확인에서 held 된 글도)
+    assert "오늘 발행 1개" in text
     assert "보류(held) 3개" in text
-    assert "[G3] 본문에 입력·계산 데이터에 없는 숫자: 7" in text
-    assert "링크 최종 응답이 정상이 아닙니다: HTTP 404" in text
-    assert posts["old_held"]["id"] not in text
+    for p in posts.values():
+        assert p["id"] not in text                              # post_id 는 텔레그램에 없다
+    assert "2,000W" not in text and "[G3]" not in text and "R3" not in text and "조회" not in text
 
-    # 오늘 발행 + 조회수
-    assert "오늘 발행 1개" in text and "조회 321" in text
-
-    # 상태 줄
-    assert "자동 정지: 없음" in text
+    # 상태: 시험지 불합격만 자세히
     assert "검수자 시험지: 불합격 — 발행 불가" in text
     assert "연습 모드 DRY_RUN" in text
+    assert len(text.splitlines()) <= 8
 
 
-def test_uncertain_post_shown_with_reason(cfg, world):
-    # Step 4-B 항목 "uncertain 판정 → held, 일일 요약에 표시"
+def test_old_held_posts_are_not_counted(cfg, world):
     store, posts = world
+    assert "보류(held) 3개" in build(store, cfg)                  # old_held(8일 전)는 빠진다
+    assert "보류" not in build(MemoryStore(), cfg)                # 보류가 없으면 줄 자체가 없다
+
+
+def test_healthy_status_is_one_line(cfg, world):
+    store, _ = world
+    text = build(store, cfg, exam=(True, "합격 (2026-10-18T08:07:48+00:00, 25/25 차단, 14/15 통과)"))
+    assert text.splitlines()[1] == "상태: 정상"
+    assert "시험지" not in text and "자동 정지" not in text
+
+
+def test_reply_inbox_is_not_in_digest(cfg, make_post):
+    store = MemoryStore()
+    ours = make_post(status="published", published_at=kst(2, "15:12"), threads_media_id="m-9")
+    store.insert_post(ours)
+    at = (NOW - timedelta(hours=1)).isoformat()
+    store.set_state("reply_inbox", [{"post_id": ours["id"], "reply_id": "r1", "username": "kim", "text": "저는 2번이요",
+                                     "permalink": "https://www.threads.com/@kim/post/abc", "at": at}])
     text = build(store, cfg)
-    assert f"post_id: {posts['uncertain']['id']}" in text
-    assert "R3 uncertain: '밤새 켜 둬도' 가 안전 주장인지 애매함" in text
+    assert "답해 줄 답글" not in text and "@kim" not in text and "threads.com" not in text
+    assert "오늘 둘러볼 검색어:" in text
 
 
 def test_digest_shows_auto_stop_and_token_warning(cfg, world):
@@ -120,8 +126,7 @@ def test_digest_shows_auto_stop_and_token_warning(cfg, world):
 
 def test_digest_without_posts(cfg):
     text = build(MemoryStore(), cfg)
-    assert "발행 예정 0개" in text and "보류(held) 0개" in text and "오늘 발행 0개" in text
-    assert "Cancel post" not in text
+    assert "내일(11-03) 발행 예정 0개" in text and "오늘 발행 0개" in text and "보류" not in text
 
 
 # ── 8장: cancel_post 로 예정 글 취소 ───────────────────────────────────────────
@@ -129,12 +134,11 @@ def test_digest_without_posts(cfg):
 def test_cancel_post_removes_scheduled_post(cfg, world):
     store, posts = world
     pid = posts["tomorrow"]["id"]
-    assert pid in build(store, cfg)
+    assert "내일(11-03) 발행 예정 2개" in build(store, cfg)
 
     cancelled = actions.cancel_post(store, pid)
     assert cancelled["status"] == "cancelled"
     assert store.events[-1] == {**store.events[-1], "kind": "cancel_post"}
-    assert pid not in build(store, cfg)                    # 다음 요약에서 빠진다
     assert "내일(11-03) 발행 예정 1개" in build(store, cfg)
 
 
