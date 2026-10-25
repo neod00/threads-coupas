@@ -7,15 +7,19 @@ LLM 을 쓰지 않는다. 네이버 API 는 무료(하루 1,000회)이고, 후�
   - 점수 = 최근 7일 평균 × (1 + 앞선 21일 대비 증가율, -50%~+200% 로 자름)
   - 일일 요약의 "오늘 둘러볼 검색어"에 위 3개를 쓴다 (사람이 직접 둘러보고 답글을 단다 — 자동 답글은 없다, 규칙 6)
 
-API: POST https://openapi.naver.com/v1/datalab/search
-  headers X-Naver-Client-Id / X-Naver-Client-Secret, body {startDate, endDate, timeUnit: "date", keywordGroups: [{groupName, keywords}]}
+API (2026-07-31 부터 신규 신청은 NAVER API HUB, 네이버 클라우드 콘솔에서):
+  POST https://naverapihub.apigw.ntruss.com/search-trend/v1/search
+  headers X-NCP-APIGW-API-KEY-ID / X-NCP-APIGW-API-KEY, body {startDate, endDate, timeUnit: "date", keywordGroups: [{groupName, keywords}]}
+  예전 개발자센터 키(openapi.naver.com/v1/datalab/search, X-Naver-Client-Id/Secret)는 legacy=True 로 쓴다.
+  (2026-10-25 2차 자료로 확인. 첫 실제 호출로 응답 형식을 확인할 것)
 """
 from __future__ import annotations
 
 from datetime import date, timedelta
 from typing import Callable, Sequence
 
-API = "https://openapi.naver.com/v1/datalab/search"
+API = "https://naverapihub.apigw.ntruss.com/search-trend/v1/search"
+LEGACY_API = "https://openapi.naver.com/v1/datalab/search"
 GROUPS_PER_REQUEST = 5          # API 한도
 RECENT_DAYS = 7
 BASE_DAYS = 21
@@ -33,15 +37,18 @@ def candidates_from(talk_topics: Sequence[str]) -> list[str]:
     return out
 
 
-def naver_fetcher(client_id: str, client_secret: str, http=None, timeout: float = 20) -> FetchFn:
+def naver_fetcher(client_id: str, client_secret: str, http=None, timeout: float = 20, legacy: bool = False) -> FetchFn:
     if http is None:
         import requests as http
 
     def fetch(keywords: Sequence[str], start: date, end: date) -> dict:
         body = {"startDate": start.isoformat(), "endDate": end.isoformat(), "timeUnit": "date",
                 "keywordGroups": [{"groupName": k, "keywords": [k]} for k in keywords]}
-        resp = http.post(API, json=body, timeout=timeout,
-                         headers={"X-Naver-Client-Id": client_id, "X-Naver-Client-Secret": client_secret})
+        if legacy:
+            url, headers = LEGACY_API, {"X-Naver-Client-Id": client_id, "X-Naver-Client-Secret": client_secret}
+        else:
+            url, headers = API, {"X-NCP-APIGW-API-KEY-ID": client_id, "X-NCP-APIGW-API-KEY": client_secret}
+        resp = http.post(url, json=body, timeout=timeout, headers=headers)
         if resp.status_code != 200:
             raise RuntimeError(f"네이버 데이터랩 오류 HTTP {resp.status_code}: {resp.text[:200]}")
         by_day = {}

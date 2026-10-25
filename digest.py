@@ -16,6 +16,7 @@ from __future__ import annotations
 
 import argparse
 import logging
+import os
 import sys
 from datetime import datetime, timedelta, timezone
 
@@ -148,7 +149,9 @@ def main() -> int:
     if secrets.naver_client_id and secrets.naver_client_secret and cfg.talk_topics:
         import trends
         try:
-            hot = trends.hot_keywords(cfg.talk_topics, trends.naver_fetcher(secrets.naver_client_id, secrets.naver_client_secret),
+            hot = trends.hot_keywords(cfg.talk_topics, trends.naver_fetcher(
+                secrets.naver_client_id, secrets.naver_client_secret,
+                legacy=os.environ.get("NAVER_TREND_LEGACY", "").lower() == "true"),
                                       datetime.now(KST).date())
         except Exception as e:     # 검색어는 덤이다. 실패해도 요약은 보낸다
             log.warning(f"네이버 검색 트렌드를 읽지 못해 기본 검색어를 씁니다: {e}")

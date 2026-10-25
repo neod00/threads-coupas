@@ -66,8 +66,8 @@ def test_naver_fetcher_request_shape_and_missing_days():
 
     fetch = trends.naver_fetcher("id-1", "secret-1", http=types.SimpleNamespace(post=post))
     got = fetch(["식기세척기"], date(2026, 10, 22), date(2026, 10, 24))
-    assert sent["url"] == trends.API
-    assert sent["headers"] == {"X-Naver-Client-Id": "id-1", "X-Naver-Client-Secret": "secret-1"}
+    assert sent["url"] == "https://naverapihub.apigw.ntruss.com/search-trend/v1/search"
+    assert sent["headers"] == {"X-NCP-APIGW-API-KEY-ID": "id-1", "X-NCP-APIGW-API-KEY": "secret-1"}
     assert sent["body"] == {"startDate": "2026-10-22", "endDate": "2026-10-24", "timeUnit": "date",
                             "keywordGroups": [{"groupName": "식기세척기", "keywords": ["식기세척기"]}]}
     assert got == {"식기세척기": [0.0, 80.5, 100.0]}                       # 검색이 없는 날은 0
@@ -93,3 +93,15 @@ def test_naver_keys_are_optional_secrets():
     assert "NAVER_CLIENT_ID" not in s.missing() and "NAVER_CLIENT_SECRET" not in s.missing()
     s = settings.load_secrets({"NAVER_CLIENT_SECRET": "x-SECRET"})
     assert "x-SECRET" not in repr(s)
+
+
+def test_legacy_devcenter_keys_use_old_endpoint():
+    sent = {}
+
+    def post(url, json=None, timeout=None, headers=None):
+        sent.update(url=url, headers=headers)
+        return types.SimpleNamespace(status_code=200, text="", json=lambda: {"results": []})
+
+    trends.naver_fetcher("id-1", "secret-1", http=types.SimpleNamespace(post=post), legacy=True)(["a"], TODAY, TODAY)
+    assert sent["url"] == "https://openapi.naver.com/v1/datalab/search"
+    assert sent["headers"] == {"X-Naver-Client-Id": "id-1", "X-Naver-Client-Secret": "secret-1"}
