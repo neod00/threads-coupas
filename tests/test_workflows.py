@@ -210,3 +210,29 @@ def test_no_empty_string_on_the_left_of_or(name):
     ACCOUNT=openbrain 으로 돌아 실패한 원인). 기존 계정 값을 '' 로 만들 때는 `account != 'openbrain' && x || ''` 로 쓴다."""
     text = (WF_DIR / name).read_text(encoding="utf-8")
     assert not re.search(r"&&\s*''\s*\|\|", text), "`&& '' ||` 패턴은 빈 값이 거짓이라 쓸 수 없다"
+
+
+@pytest.mark.parametrize("path, schema, account", [
+    ("db/publish_cron.sql", "public", None),
+    ("accounts/sabolkka/db/publish_cron.sql", "sabolkka", "sabolkka"),
+])
+def test_publish_cron_wakes_only_when_something_is_due(path, schema, account):
+    """2026-10-27: 30분마다 무조건 깨우다 비공개 저장소의 Actions 무료 시간(월 2,000분)을 다 써서 이틀 멈췄다.
+    pg_cron 은 그 계정 스키마에 할 일(예약 시각이 지난 approved 글, 때가 된 링크 답글)이 있고 자동 정지가 아닐 때만 깨운다."""
+    sql = (PROJECT_ROOT / path).read_text(encoding="utf-8")
+    job = re.search(r"\$job\$(.*?)\$job\$", sql, re.S).group(1)
+    assert f"from {schema}.posts where status = 'approved' and scheduled_at <= now()" in job
+    assert "threads_reply_id is null" in job and "published_at > now() - interval '1 day'" in job
+    assert f"from {schema}.system_state where key = 'auto_stop'" in job
+    # 답글 대기 시간은 계정 설정(reply_delay_hours) - 발행기의 여유(REPLY_DUE_GRACE)와 같아야 한다
+    from datetime import timedelta
+    import publisher
+    config = PROJECT_ROOT / "accounts" / account / "config.yaml" if account else PROJECT_ROOT / "config.yaml"
+    delay = load_config(config).reply_delay_hours
+    wait = timedelta(hours=delay) - publisher.REPLY_DUE_GRACE
+    if wait > timedelta(0):
+        h, m = divmod(int(wait.total_seconds()) // 60, 60)
+        assert f"published_at <= now() - interval '{h} hours {m} minutes'" in job
+    else:
+        assert "published_at <= now() -" not in job
+
