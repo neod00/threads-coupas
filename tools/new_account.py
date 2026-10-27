@@ -85,10 +85,43 @@ def render_cron(kind: str, name: str, root: Path = PROJECT_ROOT) -> str:
                 .replace("'0 11 * * *'", "'12,42 * * * *'").replace("generate.yml", "publish.yml"))
     start = text.index("-- 생성 깨우기 예약")
     end = text.index("-- 실행 방법")
-    middle = ("-- 발행 깨우기 예약 (Supabase pg_cron → GitHub publish.yml 수동 실행, 매시 12분·42분)\n"
+    middle = ("-- 발행 깨우기 예약 (Supabase pg_cron → GitHub publish.yml 수동 실행, 매시 12분·42분에 할 일이 있을 때만)\n"
               "-- 토큰은 db/publish_cron.sql 을 실행할 때 Vault 에 저장한 gh_dispatch_token 을 그대로 쓴다. 이 파일에는 토큰이 없다.\n"
               f"-- 실제 발행 여부는 저장소 변수 DRY_RUN_{name.upper()}·AUTO_PUBLISH_DISABLED_{name.upper()} 가 정한다.\n--\n")
-    return text[:start] + middle + text[end:]
+    text = text[:start] + middle + text[end:]
+    call_end = "\n  );\n  $job$"
+    if text.count(call_end) != 1:
+        raise ValueError("db/generate_cron.sql 의 예약 본문 형식이 바뀌었습니다")
+    return text.replace(call_end, "\n" + publish_gate(name, _template_reply_delay()) + "\n  $job$")
+
+
+def _template_reply_delay() -> float:
+    import yaml
+    return float(yaml.safe_load(_read(TEMPLATES / "config.yaml")).get("reply_delay_hours") or 0)
+
+
+def publish_gate(schema: str, reply_delay_hours: float) -> str:
+    """발행 예약이 할 일이 있을 때만 깨우게 하는 조건 (2026-10-27: 30분마다 무조건 깨우다 Actions 무료 시간을 다 씀).
+    답글 대기는 reply_delay_hours 에서 발행기의 여유(publisher.REPLY_DUE_GRACE, 15분)를 뺀 값."""
+    wait = int(reply_delay_hours * 60) - 15
+    reply_wait = (f"\n                   and published_at <= now() - interval '{wait // 60} hours {wait % 60} minutes'"
+                  f"   -- reply_delay_hours {reply_delay_hours:g}시간 - 15분 여유 (publisher.REPLY_DUE_GRACE)") if wait > 0 else ""
+    return (
+        "  )\n"
+        "  -- 할 일이 있을 때만 깨운다 (2026-10-27: 30분마다 무조건 깨우다 GitHub Actions 무료 시간을 다 써서 이틀 멈춤).\n"
+        "  -- 1) 예약 시각이 지난 approved 글  2) 때가 된 링크 답글(답글만 실패한 글 포함)\n"
+        "  -- 자동 정지 중이면 깨우지 않는다. 답글 감시는 publish.yml 의 4시간 예비 실행이 맡는다.\n"
+        "  where (\n"
+        f"      exists (select 1 from {schema}.posts where status = 'approved' and scheduled_at <= now())\n"
+        f"      or exists (select 1 from {schema}.posts\n"
+        "                 where status = 'published' and variant = 'link_in_reply'\n"
+        "                   and threads_media_id is not null and threads_reply_id is null\n"
+        "                   and published_at > now() - interval '1 day'   -- 하루 넘게 못 단 답글로는 깨우지 않는다 (계속 실패하면 무료 시간만 씀)"
+        f"{reply_wait}\n"
+        "                 )\n"
+        "    )\n"
+        f"    and not coalesce((select (value->>'active')::boolean from {schema}.system_state where key = 'auto_stop'), false);"
+    )
 
 
 def create_account(name: str, *, tone: str = "casual", root: Path = PROJECT_ROOT, force: bool = False) -> list[Path]:

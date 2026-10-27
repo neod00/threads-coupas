@@ -1,8 +1,10 @@
 name: Publish
 
 # 예약 시각이 된 approved 글을 1개만 발행한다 (publisher.py).
-# 주 실행: Supabase pg_cron 이 매시 12분·42분에 workflow_dispatch 로 깨운다 (db/publish_cron.sql).
-# 아래 schedule 은 Supabase 가 멈췄을 때를 위한 예비(4시간마다). GitHub 예약 실행은 몇 시간씩 밀린다.
+# 주 실행: Supabase pg_cron 이 매시 12분·42분에 DB 를 보고, 할 일(예약 시각이 지난 글, 때가 된 링크 답글)이 있을 때만
+#   workflow_dispatch 로 깨운다 (db/publish_cron.sql, accounts/<계정>/db/publish_cron.sql).
+#   2026-10-27: 30분마다 무조건 깨우다 비공개 저장소의 Actions 무료 시간(월 2,000분)을 다 써서 이틀 멈췄다.
+# 아래 schedule 은 Supabase 가 멈췄을 때를 위한 예비(4시간마다)이고, 답글 감시(자동 정지)도 이때 돈다. GitHub 예약 실행은 몇 시간씩 밀린다.
 # 규칙 8 킬 스위치: 저장소 Variables 의 AUTO_PUBLISH_DISABLED=true 면 아무것도 하지 않는다.
 # 규칙 9 DRY_RUN: 저장소 Variables 의 DRY_RUN 이 정확히 false 일 때만 실제 발행한다 (없으면 연습 모드).
 #   수동 실행에서 dry_run 을 켜면 변수와 상관없이 연습 모드다.
