@@ -14,6 +14,10 @@
 - 예약 실행은 저장소 변수 `ACCOUNTS_JSON` (예: `["openbrain","sabolkka"]`)에 적힌 계정만 돈다. 없으면 기존 계정만.
 - 수동 실행은 `account` 입력으로 계정을 고른다 (기본 openbrain).
 - Supabase pg_cron 은 계정마다 따로 깨운다. sabolkka 쪽은 `accounts/sabolkka/db/` 의 SQL(예약 이름 `threads-coupas-sabolkka-*`)이 `account=sabolkka` 로 깨운다. GitHub 토큰(Vault)은 기존 `db/publish_cron.sql` 이 넣어 둔 것을 같이 쓴다.
+- **GitHub 깨우기 토큰(Vault `gh_dispatch_token`)을 바꿀 때는 이 한 줄만 실행한다** (파일 전체를 다시 실행하지 않는다):
+  `select vault.update_secret((select id from vault.secrets where name = 'gh_dispatch_token'), '새 토큰');`
+  토큰은 fine-grained, 저장소 `neod00/threads-coupas` 하나, Actions: Read and write. 만료되면 모든 깨우기가 401 Bad credentials 로 거절된다. 확인: `select status_code from net._http_response order by created desc limit 5;` (204 가 정상)
+  `db/publish_cron.sql` 을 자리표시자가 남은 채 실행하면 토큰 모양 검사가 오류로 멈추고 Vault 는 바뀌지 않는다 (2026-10-27 사고 후 추가).
 - 발행 예약은 30분마다 그 계정 스키마를 보고 **할 일이 있을 때만** 깨운다 (2026-10-27, Actions 무료 시간 절약). 계정의 `reply_delay_hours` 를 바꾸면 그 계정의 `publish_cron.sql` 답글 대기 시간도 같이 바꾸고 Supabase 에 다시 실행한다 (테스트가 둘이 다르면 실패한다).
 - 코드는 `ACCOUNT` 가 있으면 그 이름의 스키마로 접근한다 (`store.py`). 키가 같아서 한 키가 새면 두 계정 데이터가 같이 노출된다.
 - 알림(텔레그램) 앞에는 `[sabolkka]` 가 붙는다. 기존 계정 알림은 그대로다.
