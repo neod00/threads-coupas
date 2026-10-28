@@ -111,7 +111,7 @@ def test_supabase_publish_cron():
     assert "'12,42 * * * *'" in sql
     assert "/repos/neod00/threads-coupas/actions/workflows/publish.yml/dispatches" in sql
     assert '{"ref": "main", "inputs": {"dry_run": "false"}}' in sql
-    assert "github_pat_" not in sql and "__GH_DISPATCH_TOKEN__" in sql
+    assert not re.search(r"(github_pat_|ghp_)[A-Za-z0-9_]{20,}", sql) and "__GH_DISPATCH_TOKEN__" in sql   # 토큰 모양을 검사하는 정규식은 있어도 진짜 토큰은 없다
     # 실제 발행 여부는 여전히 저장소 변수 DRY_RUN·AUTO_PUBLISH_DISABLED 가 정한다
     job = load("publish.yml")["jobs"]["publish"]
     assert "vars[format('DRY_RUN{0}'" in job["env"]["DRY_RUN"] and "== 'false'" in job["env"]["DRY_RUN"]
@@ -186,7 +186,7 @@ def test_supabase_publish_cron():
     assert "'12,42 * * * *'" in sql
     assert "/repos/neod00/threads-coupas/actions/workflows/publish.yml/dispatches" in sql
     assert '{"ref": "main", "inputs": {"dry_run": "false"}}' in sql
-    assert "github_pat_" not in sql and "__GH_DISPATCH_TOKEN__" in sql
+    assert not re.search(r"(github_pat_|ghp_)[A-Za-z0-9_]{20,}", sql) and "__GH_DISPATCH_TOKEN__" in sql   # 토큰 모양을 검사하는 정규식은 있어도 진짜 토큰은 없다
     # 실제 발행 여부는 여전히 저장소 변수 DRY_RUN·AUTO_PUBLISH_DISABLED 가 정한다
     job = load("publish.yml")["jobs"]["publish"]
     assert "vars[format('DRY_RUN{0}'" in job["env"]["DRY_RUN"] and "== 'false'" in job["env"]["DRY_RUN"]
@@ -235,4 +235,23 @@ def test_publish_cron_wakes_only_when_something_is_due(path, schema, account):
         assert f"published_at <= now() - interval '{h} hours {m} minutes'" in job
     else:
         assert "published_at <= now() -" not in job
+
+
+def test_publish_cron_refuses_a_placeholder_token():
+    """2026-10-27: 자리표시자가 남은 원본을 실행해 Vault 의 토큰이 그 글자로 덮어써졌고, 모든 깨우기가 401 로 거절됐다.
+    진짜 토큰 모양이 아니면 오류로 멈추고 Vault 를 건드리지 않는다. 사본을 만들 때 치환되는 자리표시자는 한 곳에만 있어야 한다."""
+    sql = (PROJECT_ROOT / "db" / "publish_cron.sql").read_text(encoding="utf-8")
+    code = "\n".join(line.split("--")[0] for line in sql.splitlines())          # 주석 제외
+    assert code.count("__GH_DISPATCH_TOKEN__") == 1
+    assert "new_token text := '__GH_DISPATCH_TOKEN__'" in code
+    guard = re.search(r"new_token !~ '([^']+)'", code)
+    assert guard, "토큰 모양 검사가 없습니다"
+    shape = re.compile(guard.group(1))
+    for bad in ("__GH_DISPATCH_TOKEN__", "", "abc", "github_pat_short", "github_pat_" + "A" * 30 + "\n", " ghp_" + "A" * 30):
+        assert not shape.fullmatch(bad), bad
+    for good in ("github_pat_11" + "ABCdef0123" * 5, "ghp_" + "Zy9876543210" * 3):
+        assert shape.fullmatch(good), good
+    # 검사는 Vault 를 바꾸는 문장보다 먼저 와야 한다
+    assert code.index("raise exception") < code.index("vault.create_secret") < code.index("vault.update_secret")
+    assert "perform vault.create_secret(new_token" in code and "perform vault.update_secret(sid, new_token)" in code
 
