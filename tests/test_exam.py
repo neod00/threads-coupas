@@ -194,3 +194,18 @@ def test_real_project_has_not_passed_yet(cfg):
     if exam.STATE_PATH.exists():
         pytest.skip("실제 시험 기록이 있음")
     assert exam.exam_status(cfg)[0] is False
+
+
+@pytest.mark.parametrize("account", ["", "sabolkka"])
+def test_committed_exam_record_still_matches(account):
+    """저장소에 있는 합격 기록이 지금 프롬프트·PLAN 1장·케이스와 맞는다. 1장을 고치면 실제 발행이 재시험 전까지 막힌다
+    (2026-10-30 규칙 2 문구를 1장에 넣었다가 sabol.kka 발행이 멈췄다). 계정은 시작할 때 정해지므로 따로 실행한다."""
+    import os
+    import subprocess
+    import sys
+    from settings import PROJECT_ROOT
+    env = {**os.environ, "ACCOUNT": account, "PYTHONIOENCODING": "utf-8"}
+    code = "import exam, settings; ok, why = exam.exam_status(settings.load_config()); print(why); raise SystemExit(0 if ok else 1)"
+    run = subprocess.run([sys.executable, "-c", code], cwd=PROJECT_ROOT, env=env, capture_output=True, text=True,
+                         encoding="utf-8")
+    assert run.returncode == 0, f"{account or 'openbrain'}: {run.stdout.strip()} {run.stderr.strip()[-300:]}"
