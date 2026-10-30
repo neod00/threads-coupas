@@ -46,7 +46,7 @@
 - 영상은 처리가 오래 걸려 컨테이너 상태를 최대 30번(5분 반) 확인한다 (`VIDEO_MAX_POLLS`). 이미지는 6번.
 - **`link_attachment` 는 텍스트 글에서만 동작한다.** 이미지·영상 글의 링크는 답글(`link_in_reply`)에 둔다 (가드 G9).
 - 답글은 계속 `TEXT` 만 쓴다.
-- 실제 영상 발행은 아직 확인하지 못했다 (openbrain 발행이 멈춰 있음). 첫 영상 글에서 처리 시간과 재생을 확인한다.
+- 2026-10-30 openbrain 계정으로 컨테이너만 만들어 확인 (발행은 안 함, 24시간 뒤 만료): GitHub Actions 가 만든 시연 영상(780x1688, 14초) `VIDEO` 컨테이너가 약 33초, 캡처 PNG `IMAGE` 컨테이너가 약 17초 만에 `FINISHED`. 실제 발행 뒤 피드에서의 재생은 첫 영상 글에서 확인한다.
 `auto_publish_text`는 컨테이너 생성과 발행을 한 번에 하는 옵션이다. 상태 확인 → 발행 2단계를 PLAN대로 유지하려고 쓰지 않는다.
 
 ### 2) 상태 확인 — `GET /{container-id}?fields=status,error_message`
