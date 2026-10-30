@@ -131,7 +131,8 @@ def test_sabolkka_schema_sql_matches_base_schema():
 def test_reviewer_tone_rule_per_account_and_polite_prompt_unchanged():
     import dataclasses
     import reviewer
-    polite = settings.load_config()
+    from conftest import coupang_config
+    polite = coupang_config()
     casual = dataclasses.replace(polite, tone="casual")
     p, c = reviewer.system_prompt(polite), reviewer.system_prompt(casual)
     assert "- R11 말투가 존댓말(해요체 또는 합니다체)로 일관되고" in p and "반말·자음 표현(ㅋㅋ)" in p
@@ -142,7 +143,8 @@ def test_reviewer_tone_rule_per_account_and_polite_prompt_unchanged():
 def test_generator_reply_line_spec_follows_tone():
     import dataclasses
     import generator
-    polite = settings.load_config()
+    from conftest import coupang_config
+    polite = coupang_config()
     assert "해요체" in generator.system_prompt(polite, "pick", "link_in_reply")
     casual = dataclasses.replace(polite, tone="casual")
     assert "친근한 반말" in generator.system_prompt(casual, "pick", "link_in_reply")

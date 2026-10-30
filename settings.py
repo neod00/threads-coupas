@@ -107,9 +107,15 @@ MODEL_PROVIDERS = (
     ("o4", "openai"),
 )
 # 글 유형 이름 (generator.POST_TYPES 와 같아야 한다)
-POST_TYPE_NAMES = ("calc", "compare", "pick", "bundle", "talk", "tip")
+COUPANG_POST_TYPES = ("calc", "compare", "pick", "bundle", "talk", "tip")
+# 앱 홍보 계정 (2026-10-30, PLAN 1-2): 앱 소개(launch)·기능 하나(feature)·실제로 고친 것(devlog)·질문(ask)
+APP_POST_TYPES = ("launch", "feature", "devlog", "ask")
+POST_TYPE_NAMES = COUPANG_POST_TYPES + APP_POST_TYPES
+CONTENTS = ("coupang", "app")
 # 쿠팡 파트너스 대가성 문구에서 빠지면 안 되는 문장
 DISCLOSURE_REQUIRED_PHRASES = ("쿠팡 파트너스 활동의 일환으로", "수수료를 제공받습니다")
+# 앱 홍보 계정의 링크 답글 첫 줄: 내가 만든 앱이라는 사실을 밝힌다
+APP_DISCLOSURE_REQUIRED_PHRASES = ("제가 만든",)
 
 log = logging.getLogger("threads_coupas")
 
@@ -369,6 +375,8 @@ class Config:
     ops_advice: bool = False
     # 게시물에 이미지·영상을 붙일 수 있는지 (규칙 2, 2026-10-30). 앱 홍보 계정의 자기 앱 캡처·시연 영상용. 쿠팡 계정은 false (media.py)
     allow_media: bool = False
+    # 계정이 다루는 것: coupang(쿠팡 파트너스 상품, 기본) 또는 app(내가 만든 앱 홍보, app_posts.py, PLAN 1-2)
+    content: str = "coupang"
 
 
 def provider_of(model: str) -> str:
@@ -462,12 +470,13 @@ def _parse_slots(value, min_gap_hours: float) -> tuple[time, ...]:
     return tuple(slots)
 
 
-def _parse_disclosure(value) -> str:
+def _parse_disclosure(value, content: str = "coupang") -> str:
     if not isinstance(value, str) or not value.strip():
         raise ConfigError("규칙 3: disclosure_text 가 비어 있습니다.")
     if value != value.strip() or "\n" in value:
         raise ConfigError("규칙 3: disclosure_text 는 앞뒤 공백 없는 한 줄이어야 합니다 (본문 첫 줄과 그대로 비교합니다).")
-    lacking = [p for p in DISCLOSURE_REQUIRED_PHRASES if p not in value]
+    required = APP_DISCLOSURE_REQUIRED_PHRASES if content == "app" else DISCLOSURE_REQUIRED_PHRASES
+    lacking = [p for p in required if p not in value]
     if lacking:
         raise ConfigError("규칙 3: disclosure_text 에 필수 문장이 빠졌습니다: " + ", ".join(lacking))
     return value
@@ -507,7 +516,10 @@ def parse_config(raw) -> Config:
 
     generator_model, fallback_model, reviewer_model = _parse_models(raw)
 
-    disclosure = _parse_disclosure(raw["disclosure_text"])
+    content = raw.get("content", Config.content)
+    if content not in CONTENTS:
+        raise ConfigError(f"content 는 {', '.join(CONTENTS)} 중 하나여야 합니다: {content!r}")
+    disclosure = _parse_disclosure(raw["disclosure_text"], content)
     banned = _parse_word_list(raw["banned_words"], "banned_words", REQUIRED_BANNED_WORDS)
     banned_hooks = _parse_word_list(raw["banned_hook_phrases"], "banned_hook_phrases", REQUIRED_BANNED_HOOK_PHRASES)
     in_disclosure = [w for w in banned + banned_hooks if w in disclosure]
@@ -528,10 +540,14 @@ def parse_config(raw) -> Config:
     criteria = Criteria(**{k: _int(v, f"criteria.{k}", 0) for k, v in raw["criteria"].items()})
 
     start = raw["test_start_date"]
-    types = raw.get("post_types", Config.post_types)
+    allowed_types = APP_POST_TYPES if content == "app" else COUPANG_POST_TYPES
+    types = raw.get("post_types", allowed_types if content == "app" else Config.post_types)
     if (not isinstance(types, list | tuple) or not types
-            or any(t not in POST_TYPE_NAMES for t in types)):
-        raise ConfigError(f"post_types 는 {', '.join(POST_TYPE_NAMES)} 중 하나 이상의 목록이어야 합니다: {types!r}")
+            or any(t not in allowed_types for t in types)):
+        raise ConfigError(f"content: {content} 의 post_types 는 {', '.join(allowed_types)} 중 하나 이상의 목록이어야 합니다: "
+                          f"{types!r}")
+    if content == "app" and not any(t in ("launch", "feature") for t in types):
+        raise ConfigError("content: app 은 링크 글(launch 또는 feature)이 하나는 있어야 합니다")
     tone = raw.get("tone", Config.tone)
     if tone not in TONES:
         raise ConfigError(f"tone 은 {', '.join(TONES)} 중 하나여야 합니다: {tone!r}")
@@ -569,6 +585,7 @@ def parse_config(raw) -> Config:
         reply_delay_hours=float(delay),
         ops_advice=ops_advice,
         allow_media=allow_media,
+        content=content,
     )
 
 

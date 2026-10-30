@@ -30,6 +30,9 @@ HELD_WINDOW_HOURS = 36      # 발행 직전 검사에서 held 된 글은 전날 
 # 사람이 직접 둘러볼 검색어 (2026-10-16). 하루 3개씩 돌린다. 남의 글에 자동으로 답하지 않는다 (규칙 6)
 BROWSE_KEYWORDS = ("자취 겨울템", "강아지 산책", "고양이 집사", "무드등", "겨울 이불", "전기장판", "붕어빵",
                    "빼빼로데이", "수능 선물", "크리스마스 선물", "집들이 선물", "반려동물 옷", "가습기", "자취 요리")
+# 앱 홍보 계정(content: app, 2026-10-30): 만드는 사람·쓰는 사람이 모이는 주제
+APP_BROWSE_KEYWORDS = ("1인 개발", "사이드 프로젝트", "앱 개발", "개발일지", "바이브코딩", "PDF 편집", "업무 자동화",
+                       "생산성 앱", "직장인 꿀팁", "무료 툴")
 
 
 def _hook(post: dict) -> str:
@@ -93,7 +96,8 @@ def build_digest(store, cfg: Config, now: datetime, *, dry_run: bool, token_issu
                      + " — 남의 글 5개에 진심 답글 달기 (10분)")
     else:
         start = today.toordinal() * 3
-        words = [BROWSE_KEYWORDS[(start + i) % len(BROWSE_KEYWORDS)] for i in range(3)]
+        pool = APP_BROWSE_KEYWORDS if cfg.content == "app" else BROWSE_KEYWORDS
+        words = [pool[(start + i) % len(pool)] for i in range(3)]
         lines.append("오늘 둘러볼 검색어: " + ", ".join(words) + " — 남의 글 5개에 진심 답글 달기 (10분)")
     lines.append("")
 

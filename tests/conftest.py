@@ -1,6 +1,7 @@
 """여러 테스트가 함께 쓰는 고정 데이터. 요금표·상품은 테스트용 값이다 (실제 한전 요금·쿠팡 상품 아님)."""
 import copy
 import dataclasses
+from pathlib import Path
 from datetime import time
 
 import pytest
@@ -28,6 +29,20 @@ PRODUCTS = [
 ]
 
 
+# 쿠팡 계정 기준 설정 (2026-10-30 openbrain 이 앱 홍보 계정이 되기 전의 config.yaml 그대로).
+# 쿠팡 글 규칙을 보는 테스트는 실제 openbrain 설정 대신 이것을 쓴다.
+COUPANG_CONFIG_PATH = Path(__file__).resolve().parent / "fixtures" / "coupang_config.yaml"
+
+
+def coupang_raw() -> dict:
+    import yaml
+    return yaml.safe_load(COUPANG_CONFIG_PATH.read_text(encoding="utf-8"))
+
+
+def coupang_config():
+    return settings.parse_config(coupang_raw())
+
+
 @pytest.fixture
 def tariff():
     return calculator.parse_tariff(copy.deepcopy(TARIFF_RAW))
@@ -37,7 +52,7 @@ def tariff():
 def cfg():
     # 운영 설정은 일부 유형만 켜 둘 수 있다 (post_types). 테스트는 모든 유형을 켠 상태에서 규칙을 본다.
     return dataclasses.replace(
-        settings.load_config(), post_types=("calc", "compare", "pick", "tip"), max_posts_per_day=4,
+        coupang_config(), post_types=("calc", "compare", "pick", "tip"), max_posts_per_day=4,
         slots_kst=(time(8, 10), time(12, 30), time(18, 40), time(21, 30)))
 
 

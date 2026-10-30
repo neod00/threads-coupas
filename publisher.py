@@ -483,7 +483,13 @@ def main() -> int:
     import media
     media_host = (media.DryRunMediaHost() if dry_run()
                   else media.SupabaseMediaHost(secrets.supabase_url, secrets.supabase_service_role_key))
-    result = run_once(store, cfg, api=api, link_checker=check_link, notifier=make_notifier(secrets),
+    if cfg.content == "app":
+        # 앱 홍보 계정의 링크는 apps.yaml 에 등록한 내 앱 주소만 (쿠팡 간편링크가 아니다)
+        import app_posts
+        link_checker = app_posts.make_link_checker(app_posts.load_apps())
+    else:
+        link_checker = check_link
+    result = run_once(store, cfg, api=api, link_checker=link_checker, notifier=make_notifier(secrets),
                       exam_status=exam.exam_status(cfg), reply_reader=reader, media_host=media_host)
     log.info(f"결과: {json.dumps(result, ensure_ascii=False)}")
     return 0 if result["action"] != "failed" else 1

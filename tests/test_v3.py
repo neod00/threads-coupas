@@ -169,25 +169,39 @@ def test_post_types_limit_plan(cfg):
     assert "tip" not in pipeline.plan_day([], no_tip, date(2026, 10, 11), False, has_picks=True, has_calc=True)
 
 
-def test_project_config_makes_only_picks():
-    from settings import load_config
-    assert load_config().post_types == ("pick", "bundle", "talk")
+def test_project_config_is_app_account():
+    # 2026-10-30: openbrain 은 앱 홍보 계정 (쿠팡 글을 만들지 않는다)
+    from settings import APP_POST_TYPES, load_config
+    cfg = load_config()
+    assert cfg.content == "app" and cfg.post_types == APP_POST_TYPES
 
 
 def test_post_types_validation():
     import copy
     import yaml
-    from settings import PROJECT_ROOT, parse_config
-    raw = yaml.safe_load((PROJECT_ROOT / "config.yaml").read_text(encoding="utf-8"))
-    for bad in ([], ["review"], "pick"):
+    from conftest import coupang_raw
+    from settings import APP_POST_TYPES, PROJECT_ROOT, parse_config
+    raw = coupang_raw()
+    for bad in ([], ["review"], "pick", ["launch"]):          # 쿠팡 계정은 앱 글 유형을 쓸 수 없다
         broken = copy.deepcopy(raw)
         broken["post_types"] = bad
         with pytest.raises(ConfigError):
             parse_config(broken)
     del raw["post_types"]
     assert parse_config(raw).post_types == ("calc", "compare", "pick", "tip")     # 없으면 전부
+    # 앱 계정(openbrain): 앱 글 유형만, 링크 글(launch·feature) 하나는 있어야 한다, 없으면 앱 글 전부
+    app = yaml.safe_load((PROJECT_ROOT / "config.yaml").read_text(encoding="utf-8"))
+    for bad in (["pick"], ["devlog", "ask"]):
+        with pytest.raises(ConfigError):
+            parse_config({**app, "post_types": bad})
+    del app["post_types"]
+    assert parse_config(app).post_types == APP_POST_TYPES
+    with pytest.raises(ConfigError, match="제가 만든"):
+        parse_config({**app, "disclosure_text": "[광고] 앱 소개"})
 
 
 def test_post_type_names_match_generator():
     import settings
-    assert settings.POST_TYPE_NAMES == generator.POST_TYPES
+    assert settings.COUPANG_POST_TYPES == generator.POST_TYPES
+    assert settings.APP_POST_TYPES == generator.APP_TYPES
+    assert settings.POST_TYPE_NAMES == generator.POST_TYPES + generator.APP_TYPES

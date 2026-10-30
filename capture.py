@@ -284,8 +284,8 @@ def parse_apps(raw) -> tuple[App, ...]:
     apps, seen = [], set()
     for item in raw["apps"]:
         if not isinstance(item, dict) or not {"id", "name", "url", "shots"} <= set(item) \
-                or set(item) - {"id", "name", "url", "shots", "clips", "allowed_hosts"}:
-            raise CaptureError(f"앱 항목은 id, name, url, shots (와 선택 clips, allowed_hosts) 만 가집니다: {item!r}")
+                or set(item) - {"id", "name", "url", "shots", "clips", "allowed_hosts", "info"}:
+            raise CaptureError(f"앱 항목은 id, name, url, shots (와 선택 clips, allowed_hosts, info) 만 가집니다: {item!r}")
         app_id = _item_id(item["id"], seen, "앱")
         url = urlparse(str(item["url"]))
         if url.scheme != "https" or not url.hostname:

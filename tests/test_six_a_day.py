@@ -6,11 +6,12 @@ import pipeline
 import publisher
 import rules
 import settings
+from conftest import coupang_config, coupang_raw
 from settings import KST
 
 
 def test_six_slots_keep_two_hour_gap(cfg):
-    six = settings.load_config()
+    six = coupang_config()
     minutes = [t.hour * 60 + t.minute for t in six.slots_kst]
     assert len(minutes) == 6
     assert all(b - a >= 120 for a, b in zip(minutes, minutes[1:] + [minutes[0] + 1440]))
@@ -21,7 +22,7 @@ def test_code_cap_is_six_and_cannot_be_exceeded():
     assert settings.HARD_MAX_POSTS_PER_DAY == 6
     raw = {"max_posts_per_day": 7}
     import yaml
-    base = yaml.safe_load(settings.CONFIG_PATH.read_text(encoding="utf-8"))
+    base = coupang_raw()
     try:
         settings.parse_config({**base, **raw})
     except settings.ConfigError as e:
@@ -31,7 +32,7 @@ def test_code_cap_is_six_and_cannot_be_exceeded():
 
 
 def test_plan_day_six_posts_is_three_links_and_three_talks():
-    six = settings.load_config()
+    six = coupang_config()
     day = date(2026, 10, 20)
     plan = pipeline.plan_day([], six, day, True, has_picks=True, has_calc=True, has_bundle=True)
     assert plan == ["bundle", "pick", "pick", "talk", "talk", "talk"]
@@ -40,7 +41,7 @@ def test_plan_day_six_posts_is_three_links_and_three_talks():
 
 
 def test_next_slots_fill_in_order_and_respect_link_limit():
-    six = settings.load_config()
+    six = coupang_config()
     day = datetime(2026, 10, 20, tzinfo=KST)
     made, got = [], []
     for has_link in (True, False, True, False, True, False):
@@ -56,7 +57,7 @@ def test_next_slots_fill_in_order_and_respect_link_limit():
 
 
 def test_publisher_daily_cap_follows_config():
-    six = settings.load_config()
+    six = coupang_config()
     now = datetime(2026, 10, 20, 22, 0, tzinfo=KST)
     published = [{"id": f"p{i}", "published_at": (now - timedelta(hours=3 + i * 2)).isoformat()} for i in range(5)]
     post = {"id": "new"}

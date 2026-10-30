@@ -29,6 +29,59 @@ apps:
   - id: pdfmonster
     name: PdfMonster
     url: https://pdfmonster.xyz/
+    # 글감 (app_posts.py, PLAN 1-2). 글의 사실·숫자는 여기 적힌 것만 쓴다. 사람이 확인하고 고친다.
+    # updates 는 실제로 고친 것만 적는다 (devlog 글은 여기 적힌 것으로만 만든다. 비어 있으면 devlog 를 쓰지 않는다)
+    info:
+      one_liner: 브라우저에서 PDF 글자를 그 자리에서 바로 고치는 무료 편집기
+      audience: 계약서·서류 PDF 를 가끔 고쳐야 하는 직장인과 학생
+      problem: PDF 글자 하나 고치려고 프로그램을 설치하거나, 개인정보가 든 서류를 처음 보는 사이트에 올려야 하는 것
+      how: PDF 처리 엔진이 내 브라우저 안에서 돌아가서, 파일이 서버로 올라가지 않는다
+      facts:
+        - 무료
+        - 회원가입 없음
+        - 설치 없음
+        - 파일이 서버로 올라가지 않고 내 브라우저 안에서만 처리된다
+        - PC·Mac·모바일 브라우저에서 쓸 수 있다
+        - 최대 60MB PDF 까지 열 수 있다
+        - 한글·HWP 에서 바꾼 PDF 도 원래 글꼴과 간격에 맞춰 고쳐진다
+      limits:
+        - 혼자 만들고 있어서 아직 거친 부분이 있다
+      link: https://pdfmonster.xyz/
+      launch_media: [edit-text-demo, edit-text, search]
+      features:
+        - id: edit-text
+          name: 글자 수정
+          desc: PDF 글줄을 눌러 그 자리에서 글자를 고친다. 한글·HWP 변환 PDF 도 원래 글꼴과 간격에 맞춰진다
+          media: edit-text
+          clip: edit-text-demo
+        - id: redact
+          name: 개인정보 찾아 가리기
+          desc: 전화번호·주민등록번호·이메일·카드번호·계좌번호 형태를 자동으로 찾아 한꺼번에 가린다. 가린 글자는 저장할 때 PDF 에서 실제로 지워진다
+          media: search
+          clip: edit-text-demo
+        - id: sign
+          name: 서명 넣기
+          desc: 손으로 그리거나 이름을 입력해 서명을 만들고 PDF 에 넣는다. 서명은 내 브라우저에만 저장된다
+        - id: merge-split
+          name: 합치기·나누기
+          desc: 여러 PDF 를 하나로 합치거나, 필요한 쪽만 뽑거나 여러 파일로 나눈다
+        - id: compress
+          name: 용량 줄이기
+          desc: PDF 안의 이미지를 다시 압축해 파일 용량을 줄인다
+        - id: annotate
+          name: 텍스트·도형·형광펜
+          desc: PDF 위에 글상자, 사각형·화살표 같은 도형, 펜과 형광펜으로 표시한다
+        - id: stamp
+          name: 워터마크·쪽 번호
+          desc: 대외비·사본 같은 워터마크와 쪽 번호를 넣는다
+      updates: []
+      questions:
+        - PDF 고칠 때 제일 귀찮은 게 뭐예요
+        - PDF 고칠 일 생기면 보통 어떻게 하세요
+        - 서류 PDF 를 온라인 사이트에 올리는 게 찜찜한 적 있어요
+        - 계약서 PDF 에서 제일 자주 고치는 부분은 어디예요
+        - PDF 편집기에 이런 기능 하나 더 있으면 좋겠다 싶은 것
+        - 휴대폰으로 PDF 고쳐 본 적 있어요
     shots:
       - id: home
         feature: 첫 화면 — 파일이 서버로 올라가지 않는 무료 PDF 편집기

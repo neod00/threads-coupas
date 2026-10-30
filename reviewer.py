@@ -35,6 +35,7 @@ from settings import PROJECT_ROOT, Config
 log = logging.getLogger("threads_coupas")
 
 PROMPT_PATH = PROJECT_ROOT / "prompts" / "reviewer.md"
+APP_PROMPT_PATH = PROJECT_ROOT / "prompts" / "reviewer_app.md"
 PLAN_PATH = PROJECT_ROOT / "PLAN.md"
 ITEM_CODES = tuple(f"R{i}" for i in range(1, 13))
 VERDICTS = ("pass", "fail", "uncertain")
@@ -116,14 +117,20 @@ TONE_RULES = {
 }
 
 
-def system_prompt(cfg: Config, prompt_path=PROMPT_PATH, plan_path=PLAN_PATH) -> str:
-    return prompt_path.read_text(encoding="utf-8").format(
-        absolute_rules=absolute_rules(plan_path), disclosure_text=cfg.disclosure_text,
-        tone_rule=TONE_RULES[cfg.tone],
-    )
+def prompt_path_for(cfg: Config):
+    """계정 종류에 맞는 검수 프롬프트. 앱 홍보 계정(content: app)은 앱 글 기준(reviewer_app.md, 2026-10-30)."""
+    return APP_PROMPT_PATH if cfg.content == "app" else PROMPT_PATH
 
 
-def prompt_hash(cfg: Config, prompt_path=PROMPT_PATH, plan_path=PLAN_PATH) -> str:
+def system_prompt(cfg: Config, prompt_path=None, plan_path=PLAN_PATH) -> str:
+    prompt_path = prompt_path or prompt_path_for(cfg)
+    template = prompt_path.read_text(encoding="utf-8")
+    # 앱 검수 프롬프트에는 쿠팡 계정의 1장 규칙 전문을 넣지 않는다 (앱 글의 규칙은 프롬프트에 직접 적었다)
+    rules = absolute_rules(plan_path) if "{absolute_rules}" in template else ""
+    return template.format(absolute_rules=rules, disclosure_text=cfg.disclosure_text, tone_rule=TONE_RULES[cfg.tone])
+
+
+def prompt_hash(cfg: Config, prompt_path=None, plan_path=PLAN_PATH) -> str:
     """검수 프롬프트(규칙 전문 포함)·출력 스키마·요청 설정의 해시. 시험지 합격 기록과 대조한다."""
     blob = (system_prompt(cfg, prompt_path, plan_path) + json.dumps(OUTPUT_SCHEMA, sort_keys=True)
             + json.dumps(request_params(cfg.reviewer_model), sort_keys=True))

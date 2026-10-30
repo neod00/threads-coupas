@@ -196,11 +196,14 @@ def test_openai_key_is_optional():
 
 @pytest.fixture
 def raw():
-    return yaml.safe_load(settings.CONFIG_PATH.read_text(encoding="utf-8"))
+    from conftest import coupang_raw
+    return coupang_raw()
 
 
 def test_project_config_matches_plan():
-    cfg = settings.load_config()
+    # 쿠팡 계정 기준 설정 (openbrain 은 2026-10-30 앱 홍보 계정이 됐다)
+    from conftest import coupang_config
+    cfg = coupang_config()
     assert cfg.max_posts_per_day == 6                      # 2026-10-17 사용자 결정 (규칙 5 개정)
     assert cfg.min_gap_hours == 2
     assert [t.strftime("%H:%M") for t in cfg.slots_kst] == ["08:10", "10:30", "13:00", "16:00", "19:00", "21:30"]

@@ -28,7 +28,8 @@ def products(n):
 
 @pytest.fixture
 def cfg():
-    return dataclasses.replace(settings.load_config(), post_types=("pick", "talk"), max_posts_per_day=3,
+    from conftest import coupang_config
+    return dataclasses.replace(coupang_config(), post_types=("pick", "talk"), max_posts_per_day=3,
                                max_link_post_ratio=0.7, ops_advice=True)
 
 

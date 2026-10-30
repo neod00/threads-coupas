@@ -40,7 +40,9 @@ from settings import Config, account_path
 log = logging.getLogger("threads_coupas")
 
 POST_TYPES = ("calc", "compare", "pick", "bundle", "talk", "tip")   # pick 2026-10-10, bundle·talk 2026-10-16
-NO_LINK_TYPES = ("tip", "talk")                     # 링크·대가성 문구가 없는 글
+# 앱 홍보 계정 (2026-10-30, app_posts.py): 글감(payload)·링크·이미지는 app_posts 가 만들어 generate_post 에 넘긴다
+APP_TYPES = ("launch", "feature", "devlog", "ask")
+NO_LINK_TYPES = ("tip", "talk", "devlog", "ask")    # 링크·대가성 문구가 없는 글
 VARIANTS = ("link_in_body", "link_in_reply")
 HOOK_STYLES = ("question", "result", "compare")     # 동률일 때 이 순서
 HOOK_WINDOW_DAYS = 7
@@ -134,6 +136,14 @@ def system_prompt(cfg: Config, post_type: str, variant: str | None) -> str:
         (CASUAL_REPLY_SPEC if cfg.tone == "casual" else POLITE_REPLY_SPEC)
         if variant == "link_in_reply" else "null"
     )
+    if post_type in APP_TYPES:
+        return _read_prompt("app_base.md").format(
+            banned_words=", ".join(cfg.banned_words),
+            banned_hook_phrases=", ".join(cfg.banned_hook_phrases),
+            max_body_chars=cfg.limits.max_body_chars,
+            hook_number_rule="훅에 숫자가 없어도 됩니다. 숫자를 쓰면 앱 데이터에 있는 값만 씁니다.",
+            reply_line_spec=reply_spec,
+        )
     number_rule = "훅에 숫자가 없어도 됩니다. 숫자를 쓰면 데이터에 있는 값만 씁니다. kWh·W 로 시작하지 않습니다."
     return _read_prompt("threads_base.md").format(
         banned_words=", ".join(cfg.banned_words),
@@ -146,12 +156,13 @@ def system_prompt(cfg: Config, post_type: str, variant: str | None) -> str:
 
 def user_message(post_type: str, payload: dict, feedback: list | None = None, previous: dict | None = None,
                  recent_texts: Sequence[str] = ()) -> str:
-    msg = _read_prompt(f"tpl_{post_type}.md") + "\n\n계산 데이터(JSON):\n" + json.dumps(payload, ensure_ascii=False, indent=1)
+    label = "앱 데이터" if post_type in APP_TYPES else "계산 데이터"
+    msg = _read_prompt(f"tpl_{post_type}.md") + f"\n\n{label}(JSON):\n" + json.dumps(payload, ensure_ascii=False, indent=1)
     if recent_texts:
         # 생성기가 최근 글을 모르면 같은 구조를 되풀이해 검수 R9(반복)에서 막힌다 (2026-10-04 자동 정지 원인).
         msg += (
             "\n\n최근에 올린 글입니다. 이 글들과 첫 문장, 문단 순서, 결론 문장이 겹치지 않게 다른 각도로 씁니다. "
-            "여기 있는 숫자·표현을 가져오지 않습니다 (숫자는 계산 데이터의 값만 씁니다).\n"
+            f"여기 있는 숫자·표현을 가져오지 않습니다 (숫자는 {label}의 값만 씁니다).\n"
             + "\n".join(f"[최근 글 {i}]\n{t}" for i, t in enumerate(recent_texts[:RECENT_TEXTS_FOR_GENERATOR], start=1))
         )
     if feedback:
@@ -160,7 +171,7 @@ def user_message(post_type: str, payload: dict, feedback: list | None = None, pr
             msg += "\n\n이전 초안:\n" + json.dumps(previous, ensure_ascii=False, indent=1)
         msg += (
             "\n\n위 문제점을 모두 고쳐 훅 후보 3개와 본문을 새로 작성하세요. 이전 초안을 되풀이하지 마세요. "
-            "지적된 숫자·표현은 빼거나 계산 데이터의 값으로 바꿉니다. 반드시 JSON 으로만 답합니다."
+            f"지적된 숫자·표현은 빼거나 {label}의 값으로 바꿉니다. 반드시 JSON 으로만 답합니다."
         )
     return msg
 
@@ -466,23 +477,35 @@ def generate_post(post_type: str, picked: Sequence[Product], tariff: Tariff, cfg
                   variant: str = "link_in_reply", tip_topic: str | None = None,
                   checks: Sequence[CheckFn] = (), history: Iterable[dict] = (),
                   max_attempts: int = MAX_ATTEMPTS, now: datetime | None = None,
-                  hours=None, recent_texts: Sequence[str] = (), bundle=None) -> dict:
+                  hours=None, recent_texts: Sequence[str] = (), bundle=None,
+                  app_subject: dict | None = None) -> dict:
     """posts 행 하나(dict)를 돌려준다. status 는 approved(가드+검수 통과), draft(가드만 통과, 검수 없음) 또는 held.
     코드 가드(guard.check_post)는 항상 먼저 실행된다 (빼거나 끌 수 없음).
-    checks: 가드 다음에 실행할 검사 함수들 (Step 4-B 검수자). history: 훅 선택용 최근 posts 행."""
+    checks: 가드 다음에 실행할 검사 함수들 (Step 4-B 검수자). history: 훅 선택용 최근 posts 행.
+    app_subject: 앱 글(APP_TYPES)의 {payload, link, media, app_id} (app_posts 가 만든다)."""
     checks = [guard.make_checker(cfg), *checks]
-    if post_type not in POST_TYPES:
+    if post_type not in POST_TYPES + APP_TYPES:
         raise ValueError(f"알 수 없는 유형: {post_type}")
     if post_type not in NO_LINK_TYPES and variant not in VARIANTS:
         raise ValueError(f"알 수 없는 variant: {variant}")
     if post_type == "bundle" and bundle is None:
         raise ValueError("bundle 글은 테마(bundle)가 필요합니다")
+    if (post_type in APP_TYPES) != (app_subject is not None):
+        raise ValueError("앱 글(launch·feature·devlog·ask)만 app_subject 를 받고, 반드시 받아야 합니다")
     now = now or datetime.now(timezone.utc)
     variant = None if post_type in NO_LINK_TYPES else variant
-    link = None if post_type in NO_LINK_TYPES else (bundle.link if post_type == "bundle" else picked[0].link)
+    if post_type in APP_TYPES:
+        link = None if post_type in NO_LINK_TYPES else app_subject["link"]
+    else:
+        link = None if post_type in NO_LINK_TYPES else (bundle.link if post_type == "bundle" else picked[0].link)
     style_order = hook_style_order(history, now)
 
-    payload = build_payload(post_type, picked, tariff, tip_topic, day=now.date(), hours=hours, bundle=bundle)
+    # 앱 글은 붙일 이미지·영상(media)도 가드 G9 를 거친다
+    app_fields = {"media": list(app_subject.get("media") or [])} if app_subject is not None else {}
+    if app_subject is not None:
+        payload = app_subject["payload"]
+    else:
+        payload = build_payload(post_type, picked, tariff, tip_topic, day=now.date(), hours=hours, bundle=bundle)
     system = system_prompt(cfg, post_type, variant)
     attempts, feedback, previous = [], None, None
     fields, candidates, passed, final = None, [], False, False
@@ -505,7 +528,7 @@ def generate_post(post_type: str, picked: Sequence[Product], tariff: Tariff, cfg
             all_problems = []
             for style in style_order:
                 fields = assemble(post_type, variant, draft, by_style[style], cfg, link)
-                result, records = _run_checks(dict(fields, type=post_type, calc_payload=payload), checks)
+                result, records = _run_checks(dict(fields, type=post_type, calc_payload=payload, **app_fields), checks)
                 for rec in records:
                     review.update(review_result=rec["review_result"], review_model=rec["review_model"])
                     review["review_attempts"] += rec["requests"]
@@ -532,11 +555,16 @@ def generate_post(post_type: str, picked: Sequence[Product], tariff: Tariff, cfg
         fields = {"text": "", "reply_text": None, "has_link": post_type not in NO_LINK_TYPES, "link_url": link,
                   "variant": variant, "hook_style": None, "topic_tag": None}
     reviewed_ok = passed and (review["review_result"] or {}).get("status") == "approved"
+    if app_subject is not None:
+        product_ids = [app_subject["app_id"]]      # 앱 글은 어느 앱의 글인지 남긴다 (launch 는 앱마다 한 번)
+    else:
+        product_ids = [p.product_id for p in picked] if post_type not in NO_LINK_TYPES + ("bundle",) else []
     return {
         "id": str(uuid.uuid4()),
         "type": post_type,
-        "product_ids": [p.product_id for p in picked] if post_type not in NO_LINK_TYPES + ("bundle",) else [],
+        "product_ids": product_ids,
         **fields,
+        **app_fields,
         "hook_candidates": candidates,
         "calc_payload": payload,
         # 규칙 4: approved 는 코드 가드와 AI 검수자를 모두 통과한 글에만. 검수 없이 가드만 통과하면 draft 로 둔다.

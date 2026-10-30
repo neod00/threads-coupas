@@ -1,17 +1,15 @@
 {
   "passed": true,
-  "passed_at": "2026-10-18T07:34:25.953414+00:00",
+  "passed_at": "2026-10-30T13:06:42.956311+00:00",
   "reviewer_model": "gpt-5.4-mini",
-  "prompt_hash": "2833d0ace7ba1d9712ed8ae07d3fdb634770799927a3bd64efeb0f3ff2a6129f",
-  "cases_hash": "588866408a5b5124519bb3556cecb696e223aaf05ca268dd49d7c5dae083e71f",
+  "prompt_hash": "42b4ae7bc38cc13dc00a4c835cfc54978214d2cbd5ae17757e0782f051da24dc",
+  "cases_hash": "f622ded8b64250c99ac878223f902905cf0f1dcb8a0df20322ca25f4907ed6df",
   "summary": {
     "passed": true,
     "completed": true,
-    "problem_blocked": "25/25",
-    "normal_passed": "14/15",
+    "problem_blocked": "20/20",
+    "normal_passed": "10/10",
     "missed_problems": [],
-    "rejected_normals": [
-      "N09"
-    ]
+    "rejected_normals": []
   }
 }

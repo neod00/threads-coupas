@@ -92,7 +92,8 @@ def bundle_available(bundles, used, day, now: datetime) -> bool:
 
 def run_generate(store, cfg: Config, tariff, products, *, complete, review_call, notifier, now: datetime,
                  env=None, variant: str = "link_in_reply", save: bool = True, bundles=None,
-                 sleep=time.sleep, clock=time.monotonic) -> dict:
+                 sleep=time.sleep, clock=time.monotonic, apps=None) -> dict:
+    """apps: content: app 계정의 앱 목록 (app_posts.load_apps). 없으면 apps.yaml 에서 읽는다."""
     from settings import auto_publish_disabled
 
     if auto_publish_disabled(env):
@@ -105,14 +106,20 @@ def run_generate(store, cfg: Config, tariff, products, *, complete, review_call,
     tomorrow = rules.kst_date(now) + timedelta(days=1)
     day_start = datetime.combine(tomorrow, datetime.min.time(), tzinfo=KST)
     occupying = store.list_posts(rules.OCCUPYING)
-    if bundles is None:
-        from bundles import load_bundles
-        bundles = load_bundles()
     # 실제로 쓰인 글(발행됨 + 발행 대기). 주제 돌려 쓰기와 반복 판정에 쓴다. 오래된 것 → 최신 순.
     used = store.list_posts(USED_STATUSES)
-    types = plan_day(occupying, cfg, tomorrow, _has_compare_pairs(products),
-                     has_picks=any(not p.has_power for p in products), has_calc=any(p.has_power for p in products),
-                     has_bundle=bundle_available(bundles, used, tomorrow, now))
+    if cfg.content == "app":
+        import app_posts
+        apps = apps if apps is not None else app_posts.load_apps()
+        bundles = ()
+        types = app_posts.plan_day(occupying, cfg, tomorrow, apps, used)
+    else:
+        if bundles is None:
+            from bundles import load_bundles
+            bundles = load_bundles()
+        types = plan_day(occupying, cfg, tomorrow, _has_compare_pairs(products),
+                         has_picks=any(not p.has_power for p in products), has_calc=any(p.has_power for p in products),
+                         has_bundle=bundle_available(bundles, used, tomorrow, now))
     if not types:
         return {"action": "no_free_slot", "posts": []}
 
@@ -135,8 +142,11 @@ def run_generate(store, cfg: Config, tariff, products, *, complete, review_call,
         for post_type in queue:
             post = _generate_one(post_type, offset, products=products, tariff=tariff, cfg=cfg, complete=complete,
                                  variant=variant, used=used, history=history, made=made, rev=rev, bundles=bundles,
-                                 tomorrow=tomorrow, day_start=day_start, occupying=occupying, now=now)
+                                 tomorrow=tomorrow, day_start=day_start, occupying=occupying, now=now, apps=apps)
             offset += 1
+            if post is None:        # 앱 글: 고를 주제가 없다 (예: 소개 글이 보류돼 기능 글을 아직 쓸 수 없음)
+                log.info(f"[생성] {post_type} → 고를 주제가 없어 건너뜀")
+                continue
             made.append(post)
             if save:
                 store.insert_post(post)
@@ -154,8 +164,24 @@ def run_generate(store, cfg: Config, tariff, products, *, complete, review_call,
 
 
 def _generate_one(post_type, i, *, products, tariff, cfg, complete, variant, used, history, made, rev, bundles,
-                  tomorrow, day_start, occupying, now) -> dict:
-    """글 1개 생성 → 가드·검수 → approved 면 다음 날 빈 슬롯 배정."""
+                  tomorrow, day_start, occupying, now, apps=None) -> dict | None:
+    """글 1개 생성 → 가드·검수 → approved 면 다음 날 빈 슬롯 배정. 앱 글에 고를 주제가 없으면 None."""
+    newest_first = [p["text"] for p in reversed(used)]
+    same_type = [p["text"] for p in reversed(used) if p["type"] == post_type]
+    if cfg.content == "app":
+        import app_posts
+        # 가장 오래 안 쓴 (앱 × 기능·질문·고친 것) 주제를 고른다. 이미지·영상도 여기서 정한다
+        subject = app_posts.pick_subject(apps, post_type, tomorrow, used, offset=i)
+        if subject is None:
+            return None
+        app_subject = {"payload": app_posts.build_payload(subject, post_type), "link": subject["app"].link,
+                       "media": app_posts.pick_media(subject, post_type, used, cfg), "app_id": subject["app"].id}
+        check = reviewer_mod.make_check(rev, app_posts.review_rows(subject["app"]),
+                                        newest_first[:reviewer_mod.RECENT_POSTS_LIMIT])
+        post = generator.generate_post(post_type, [], tariff, cfg, complete, variant=variant, checks=[check],
+                                       history=history + made, now=now, recent_texts=same_type,
+                                       app_subject=app_subject)
+        return _schedule(post, used, cfg, occupying, made, day_start, tomorrow)
     # 가장 오래 안 쓴 (상품 × 사용시간) 조합·팁 주제를 고른다 (같은 숫자의 글이 되풀이되면 검수 R9 에 막힌다)
     subject = generator.pick_subject(products, post_type, tomorrow, used, offset=i, bundles=bundles,
                                      talk_topics=cfg.talk_topics)
@@ -167,16 +193,17 @@ def _generate_one(post_type, i, *, products, tariff, cfg, complete, variant, use
         rows = [{"name": it.name, "note": it.note, "link": bundle.link} for it in bundle.items]
     else:
         rows = reviewer_mod.product_rows(picked) if post_type not in generator.NO_LINK_TYPES else []
-    newest_first = [p["text"] for p in reversed(used)]
     check = reviewer_mod.make_check(rev, rows, newest_first[:reviewer_mod.RECENT_POSTS_LIMIT])
-    same_type = [p["text"] for p in reversed(used) if p["type"] == post_type]
     post = generator.generate_post(post_type, picked, tariff, cfg, complete, variant=variant, tip_topic=topic,
                                    checks=[check], history=history + made, now=now,
                                    hours=subject["hours"], recent_texts=same_type, bundle=bundle)
+    return _schedule(post, used, cfg, occupying, made, day_start, tomorrow)
+
+
+def _schedule(post, used, cfg, occupying, made, day_start, tomorrow) -> dict:
+    """approved 글을 다음 날 빈 슬롯에 둔다 (자리가 없으면 held). approved 글은 used 에 넣어 같은 실행의 주제 고르기에 반영한다."""
     if post["status"] == "approved":
         used.append(post)
-
-    if post["status"] == "approved":
         # 다음 날 슬롯만 본다 (20:00 에 돌아도 오늘 21:30 슬롯에 넣지 않는다)
         slot = rules.next_slot(occupying + made, post["has_link"], cfg, after=day_start, horizon_days=0)
         if slot is None:

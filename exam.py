@@ -30,6 +30,8 @@ from settings import ACCOUNT_DIR, PROJECT_ROOT, Config
 log = logging.getLogger("threads_coupas")
 
 CASES_PATH = PROJECT_ROOT / "tests" / "review_cases" / "cases.json"
+# 앱 홍보 계정(content: app)의 시험지 (2026-10-30). 앱 데이터도 이 파일 안에 따로 둔다
+APP_CASES_PATH = PROJECT_ROOT / "tests" / "review_cases_app" / "cases.json"
 # 계정마다 합격 기록을 따로 둔다 (검수 프롬프트가 계정마다 다를 수 있다). 기존 계정은 예전 위치 그대로.
 STATE_PATH = ACCOUNT_DIR / "state" / "reviewer_exam.json"
 NORMAL_MIN_RATIO = 0.8              # 문제 글은 전부 막아야 하고, 정상 글은 이 비율 이상 통과해야 한다 (10개 중 8개 기준 그대로)
@@ -46,8 +48,40 @@ def cases_hash(path: Path = CASES_PATH) -> str:
     return hashlib.sha256(text.encode("utf-8")).hexdigest()
 
 
+def cases_path_for(cfg: Config) -> Path:
+    return APP_CASES_PATH if cfg.content == "app" else CASES_PATH
+
+
+def build_app_case(case: dict, data: dict, cfg: Config) -> tuple[dict, list[dict], list[str]]:
+    """앱 글 케이스: (게시물, 앱 행, 최근 글 본문). 생성기·app_posts 와 같은 방식으로 조립한다."""
+    import app_posts
+
+    apps = {a.id: a for a in (app_posts.parse_app(item) for item in data["apps"])}
+    app = apps[case["app"]]
+    post_type, key = case["type"], case.get("subject")
+    subject = {"key": f"{post_type}|{app.id}", "app": app}
+    if post_type == "feature":
+        subject.update(key=f"feature|{app.id}|{key}", feature=next(f for f in app.features if f.id == key))
+    elif post_type == "devlog":
+        subject.update(key=f"devlog|{app.id}|{key}", update=next(u for u in app.updates if u.id == key))
+    elif post_type == "ask":
+        subject.update(key=f"ask|{app.id}|{key}", question=app.questions[key])
+    text = f"{case['hook']}\n\n{case['body']}"
+    if post_type in generator.NO_LINK_TYPES:
+        post = {"type": post_type, "text": text, "reply_text": None, "has_link": False, "link_url": None, "variant": None}
+    else:
+        post = {"type": post_type, "text": text, "reply_text": f"{cfg.disclosure_text}\n\n{case['reply_line']}",
+                "has_link": True, "link_url": app.link, "variant": "link_in_reply"}
+    post["calc_payload"] = app_posts.build_payload(subject, post_type)
+    by_case = {c["id"]: c for c in data["cases"]}
+    recent = [build_app_case(by_case[cid], data, cfg)[0]["text"] for cid in case.get("recent_from", [])]
+    return post, app_posts.review_rows(app), recent
+
+
 def build_case(case: dict, data: dict, cfg: Config) -> tuple[dict, list[dict], list[str]]:
     """(게시물, 상품 행, 최근 글 본문). 생성기와 같은 방식으로 조립한다."""
+    if "apps" in data:
+        return build_app_case(case, data, cfg)
     tariff = calculator.parse_tariff(data["tariff"])
     by_id = {p.product_id: p for p in parse_products(data["products"])}
     picked = [by_id[pid] for pid in case["product_ids"]]
@@ -78,7 +112,7 @@ def build_case(case: dict, data: dict, cfg: Config) -> tuple[dict, list[dict], l
 
 def run_exam(rev: reviewer_mod.Reviewer, cfg: Config, data: dict | None = None) -> dict:
     """모든 케이스를 검수하고 합격 여부를 계산한다. 가드는 거치지 않는다 (검수자 자체의 실력을 본다)."""
-    data = data or load_cases()
+    data = data or load_cases(cases_path_for(cfg))
     results, call_failures = [], 0
     for case in data["cases"]:
         post, rows, recent = build_case(case, data, cfg)
@@ -110,8 +144,9 @@ def run_exam(rev: reviewer_mod.Reviewer, cfg: Config, data: dict | None = None) 
     }
 
 
-def write_state(summary: dict, cfg: Config, state_path: Path = STATE_PATH, cases_path: Path = CASES_PATH,
+def write_state(summary: dict, cfg: Config, state_path: Path = STATE_PATH, cases_path: Path | None = None,
                 **prompt_paths) -> dict:
+    cases_path = cases_path or cases_path_for(cfg)
     state = {
         "passed": summary["passed"],
         "passed_at": datetime.now(timezone.utc).isoformat() if summary["passed"] else None,
@@ -125,9 +160,10 @@ def write_state(summary: dict, cfg: Config, state_path: Path = STATE_PATH, cases
     return state
 
 
-def exam_status(cfg: Config, state_path: Path = STATE_PATH, cases_path: Path = CASES_PATH,
+def exam_status(cfg: Config, state_path: Path = STATE_PATH, cases_path: Path | None = None,
                 **prompt_paths) -> tuple[bool, str]:
     """(합격 여부, 사유). 합격 기록이 있고 모델·프롬프트·케이스 해시가 지금과 모두 같아야 합격이다."""
+    cases_path = cases_path or cases_path_for(cfg)
     try:
         state = json.loads(Path(state_path).read_text(encoding="utf-8"))
     except FileNotFoundError:

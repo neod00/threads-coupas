@@ -1,14 +1,19 @@
-# 스레드 × 쿠팡파트너스 4주 테스트 설정
+# openbrain7777 설정 — 2026-10-30 부터 내가 만든 앱을 홍보하는 1인 개발자 계정 (PLAN 1-2)
 # 값을 바꾼 뒤 `python settings.py` 로 점검한다.
 # 코드(settings.py)가 PLAN 1장 규칙보다 느슨한 값은 거부한다.
+# (쿠팡 계정 시절 설정은 tests/fixtures/coupang_config.yaml 에 그대로 남아 있다)
+
+# 계정이 다루는 것: app = 내가 만든 앱 (글감은 data/apps.yaml 의 info, app_posts.py)
+content: app
 
 # ── 발행 규칙 (규칙 5, Step 5) ─────────────────────────────
-max_posts_per_day: 6          # 코드 상한 6을 넘으면 로드 실패 (2026-10-17: 4 → 6)
+# 2026-10-30: 하루 3개 = 링크 글 1개(앱 소개·기능) + 링크 없는 글 2개(개발 일지·질문)
+max_posts_per_day: 3
 min_gap_hours: 2              # 코드 최소값 2보다 작으면 로드 실패
 # 반드시 따옴표로 감싼다 (따옴표가 없으면 YAML이 12:30을 숫자 750으로 읽는다).
 # 자정을 넘는 간격까지 포함해 슬롯 사이도 min_gap_hours 이상이어야 한다.
-slots_kst: ["08:10", "10:30", "13:00", "16:00", "19:00", "21:30"]
-max_link_post_ratio: 0.6      # 링크 없는 글을 최소 40% 유지 (하루 6개면 링크 글 3개, 링크 없는 글 3개)
+slots_kst: ["08:10", "12:30", "20:30"]
+max_link_post_ratio: 0.34     # 하루 3개 중 링크 글 1개
 
 # ── 모델 (Step 1) ────────────────────────────────────────
 # 생성 모델(대체 모델 포함)과 검수 모델의 제공사가 같으면 실행을 거부한다.
@@ -19,12 +24,12 @@ reviewer_model: gpt-5.4-mini             # 임시 (2026-10-02): Anthropic 크레
 # ── 글 제한 (Step 3, 4) ───────────────────────────────────
 limits:
   max_chars: 500              # 스레드 API 한도. 500을 넘길 수 없다
-  max_body_chars: 350         # 대가성 문구를 뺀 본문
+  max_body_chars: 350         # 훅을 뺀 본문
   max_urls: 1                 # 본문 URL + 링크 첨부 합계
 
-# ── 대가성 문구 (규칙 3) ──────────────────────────────────
-# 링크가 있는 글은 본문 첫 줄이 이 문장과 정확히 같아야 한다.
-disclosure_text: "[광고] 이 포스팅은 쿠팡 파트너스 활동의 일환으로, 이에 따른 일정액의 수수료를 제공받습니다."
+# ── 링크 답글 첫 줄 (규칙 3) ──────────────────────────────
+# 앱 링크가 있는 답글의 첫 줄은 이 문장과 정확히 같아야 한다. 내가 만든 앱이라는 사실을 밝힌다 ("제가 만든" 필수).
+disclosure_text: "제가 만든 앱이에요."
 
 # ── 금지어 (규칙 7, Step 4) ───────────────────────────────
 # settings.REQUIRED_BANNED_WORDS 에 있는 필수 금지어는 여기서 빼도 항상 적용된다.
@@ -49,13 +54,13 @@ banned_words:
   - 사용해보니
   - 써보니
   - 우리 집
-  # 안전·건강 표현
+  # 안전·보안 장담 (앱 글, 2026-10-30)
   - 안전
-  - 화재
-  - 무해
-  - 전자파
-  - 숙면
-  - 건강에
+  - 완벽
+  - 해킹
+  - 유출 걱정
+  - 평생
+  - 인생 앱
 
 # ── 금지 훅 문구 (Step 3) ──────────────────────────────────
 # settings.REQUIRED_BANNED_HOOK_PHRASES 는 여기서 빼도 항상 적용된다.
@@ -69,22 +74,21 @@ banned_hook_phrases:
   - 실화
   - 역대급
 
-# ── 판정 기준 (PLAN 0장, 시작 전에 확정) ────────────────────
+# ── 판정 기준 (PLAN 0장) ──────────────────────────────────
+# 쿠팡 시절 항목이 그대로 남아 있다 (앱 계정의 주간 리포트는 조회수만 본다)
 criteria:
   week2_min_median_views: 300     # 2주차 끝: 게시물 조회수 중앙값
-  week2_min_coupang_clicks: 30    # 2주차 끝: 쿠팡 클릭 누적
-  week4_min_commission_won: 30000 # 4주차 끝: 누적 수수료 (또는)
-  week4_min_orders: 5             # 4주차 끝: 구매 건수
+  week2_min_coupang_clicks: 30
+  week4_min_commission_won: 30000
+  week4_min_orders: 5
 
 digest_time_kst: "21:00"          # 일일 요약 발송 시각 (Step 5)
 
-# 첫 실제 발행일 (YYYY-MM-DD). 주차 계산 기준. 실제 발행 전에는 비워 둔다.
-test_start_date: 2026-10-18   # 2026-10-16 PLAN v4(참여형·시즌 모음·진짜 후기)가 처음 나가는 날로 다시 잡음
+# 첫 실제 발행일 (YYYY-MM-DD). 주차 계산 기준. 앱 홍보 글이 처음 나가는 날로 사람이 정한다.
+test_start_date: null
 
-# 만들 글 유형 (calc, compare, pick, bundle, talk, tip 중에서). 2026-10-16 사용자 결정: 팁·계산·비교 글은 재미없어서 중단.
-# 링크 글 2자리 = 소개(pick)·시즌 모음(bundle, 이틀에 한 번), 링크 없는 2자리 = 참여형(talk).
-post_types: [pick, bundle, talk]
+# 만들 글 유형 (launch, feature, devlog, ask). 앱마다 소개(launch)는 한 번, 그 뒤로 기능(feature)이 링크 자리를 채운다.
+post_types: [launch, feature, devlog, ask]
 
-# 게시물 이미지·영상 (규칙 2, 2026-10-30 사용자 결정). openbrain 은 자기 앱 홍보 계정이 되므로 data/media/ 의 앱 캡처·시연 영상을 붙일 수 있다.
-# 사용자가 직접 넣은 파일만 쓴다 (media.py, 가드 G9). 쿠팡 계정(sabolkka)은 기본값 false 그대로.
+# 게시물 이미지·영상 (규칙 2 예외, PLAN 1-1). data/media/ 의 내 앱 캡처·시연 영상만 붙인다 (media.py, 가드 G9).
 allow_media: true
