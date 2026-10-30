@@ -128,6 +128,8 @@ def _read_prompt(name: str) -> str:
 
 
 POLITE_REPLY_SPEC = '"링크 답글에 넣을 안내 한 문장, 해요체 (예: 제품은 여기에서 볼 수 있어요.)"'
+APP_REPLY_SPEC = {"polite": '"링크 답글에 넣을 안내 한 문장, 해요체 (예: 여기서 바로 써 볼 수 있어요.)"',
+                  "casual": '"링크 답글에 넣을 안내 한 문장, 반말 (예: 여기서 바로 써 볼 수 있어)"'}
 CASUAL_REPLY_SPEC = '"링크 답글에 넣을 안내 한 문장, 친근한 반말 (예: 제품은 여기서 볼 수 있어.)"'
 
 
@@ -137,6 +139,8 @@ def system_prompt(cfg: Config, post_type: str, variant: str | None) -> str:
         if variant == "link_in_reply" else "null"
     )
     if post_type in APP_TYPES:
+        if variant == "link_in_reply":
+            reply_spec = APP_REPLY_SPEC[cfg.tone]
         return _read_prompt("app_base.md").format(
             banned_words=", ".join(cfg.banned_words),
             banned_hook_phrases=", ".join(cfg.banned_hook_phrases),

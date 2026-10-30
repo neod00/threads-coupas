@@ -114,8 +114,8 @@ POST_TYPE_NAMES = COUPANG_POST_TYPES + APP_POST_TYPES
 CONTENTS = ("coupang", "app")
 # 쿠팡 파트너스 대가성 문구에서 빠지면 안 되는 문장
 DISCLOSURE_REQUIRED_PHRASES = ("쿠팡 파트너스 활동의 일환으로", "수수료를 제공받습니다")
-# 앱 홍보 계정의 링크 답글 첫 줄: 내가 만든 앱이라는 사실을 밝힌다
-APP_DISCLOSURE_REQUIRED_PHRASES = ("제가 만든",)
+# 앱 홍보 계정의 링크 답글 첫 줄: 내가 만든 앱이라는 사실을 밝힌다 ("내가 만든 앱이야." / "제가 만든 앱이에요.")
+APP_DISCLOSURE_REQUIRED_PHRASES = ("만든 앱",)
 
 log = logging.getLogger("threads_coupas")
 

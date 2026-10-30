@@ -7,7 +7,7 @@
   - 고친 것(devlog)은 info.updates 에 적힌 것만, 한 번씩만
   - 이미지·영상: 소개 = launch_media, 기능 = 그 기능 캡처, 기능 글 5개 중 1개는 시연 영상
   - 링크는 apps.yaml 에 등록한 내 앱 주소만 통과
-  - 생성: 답글 첫 줄은 "제가 만든 앱이에요.", product_ids 에 앱 id, media 저장
+  - 생성: 답글 첫 줄은 config 의 disclosure_text("내가 만든 앱이야."), product_ids 에 앱 id, media 저장
 """
 import copy
 import dataclasses
@@ -241,7 +241,8 @@ def test_generates_launch_devlog_ask_with_disclosure_reply(app_cfg, raw_app, med
     posts = {p["type"]: p for p in result["posts"]}
     assert set(posts) == {"launch", "devlog", "ask"} and all(p["status"] == "approved" for p in posts.values())
     launch = posts["launch"]
-    assert launch["reply_text"].splitlines()[0] == "제가 만든 앱이에요." and launch["link_url"] == "https://pdfmonster.xyz/"
+    assert launch["reply_text"].splitlines()[0] == app_cfg.disclosure_text == "내가 만든 앱이야."
+    assert launch["link_url"] == "https://pdfmonster.xyz/"
     assert launch["variant"] == "link_in_reply" and launch["product_ids"] == ["demo-pdf"]
     assert launch["media"] == ["demo-pdf/edit-text-demo.mp4", "demo-pdf/edit-text.png", "demo-pdf/search.png"]
     assert posts["ask"]["has_link"] is False and posts["ask"]["reply_text"] is None and posts["ask"]["media"] == []
@@ -297,3 +298,19 @@ def test_app_exam_normal_cases_pass_guard_and_most_problems_need_the_reviewer(ap
         elif problems:
             caught.append(case["id"])
     assert len(caught) <= 5, caught            # 문제 글 대부분은 가드를 빠져나가 검수자 실력을 본다
+
+
+def test_app_prompts_are_casual_and_carry_real_stories(app_cfg, apps):
+    # 2026-10-30 사용자 결정: 반말. 인기 글 분석(첫 줄 고백·질문·반전, 짧은 줄)이 생성 프롬프트에 들어 있다
+    system = generator.system_prompt(app_cfg, "launch", "link_in_reply")
+    assert app_cfg.tone == "casual" and "반말" in system and "첫 줄이 글의 전부" in system
+    assert "여기서 바로 써 볼 수 있어" in system                        # 링크 답글 안내도 반말
+    subject = app_posts.pick_subject(apps, "launch", TOMORROW, [])
+    assert app_posts.build_payload(subject, "launch")["app"]["stories"] == list(apps[0].stories) != []
+
+
+def test_app_reviewer_tone_rule_is_its_own(app_cfg, cfg):
+    # 앱 검수 R11 은 쿠팡 계정과 따로다 (쿠팡 계정의 tone_rule 을 바꾸면 sabol.kka 시험이 무효가 된다)
+    import reviewer
+    app_prompt = reviewer.system_prompt(app_cfg)
+    assert "반말·음슴체·해요체 모두 허용" in app_prompt and "{tone_rule}" not in reviewer.APP_PROMPT_PATH.read_text(encoding="utf-8")

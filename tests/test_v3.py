@@ -196,7 +196,7 @@ def test_post_types_validation():
             parse_config({**app, "post_types": bad})
     del app["post_types"]
     assert parse_config(app).post_types == APP_POST_TYPES
-    with pytest.raises(ConfigError, match="제가 만든"):
+    with pytest.raises(ConfigError, match="만든 앱"):
         parse_config({**app, "disclosure_text": "[광고] 앱 소개"})
 
 

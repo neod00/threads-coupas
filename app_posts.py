@@ -2,7 +2,8 @@
 앱 홍보 계정의 글감 (2026-10-30 사용자 결정, PLAN 1-2). config content: app 인 계정(openbrain)만 쓴다.
 
 data/apps.yaml 의 앱마다 info 블록(사람이 적은 사실)이 있어야 한다. 글의 모든 사실·숫자는 여기서만 나온다.
-  one_liner, audience, problem, how, facts, limits, link, launch_media, features, updates, questions
+  one_liner, audience, problem, how, facts, limits, stories, link, launch_media, features, updates, questions
+stories 는 만든 사람이 직접 적은 진짜 이야기(만든 계기, 첫 사용자 등)다. 1인칭 경험은 여기 적힌 것만 쓸 수 있다.
 
 글 유형 (하루 배분은 plan_day)
   launch  : 앱마다 한 번. 불편 → 만든 이유 → 작동 원리 → 무료·설치 여부 → 솔직한 한계 → 피드백 요청. 시연 영상 + 캡처
@@ -67,6 +68,7 @@ class AppInfo:
     how: str
     facts: tuple[str, ...]
     limits: tuple[str, ...]
+    stories: tuple[str, ...]
     launch_media: tuple[str, ...]
     features: tuple[Feature, ...]
     updates: tuple[Update, ...]
@@ -102,7 +104,7 @@ def parse_app(item: dict) -> AppInfo | None:
     if info is None:
         return None
     app_id, where = item["id"], f"apps.yaml {item['id']}.info"
-    keys = {"one_liner", "audience", "problem", "how", "facts", "limits", "link", "launch_media", "features",
+    keys = {"one_liner", "audience", "problem", "how", "facts", "limits", "stories", "link", "launch_media", "features",
             "updates", "questions"}
     if not isinstance(info, dict) or set(info) - keys or not {"one_liner", "problem", "facts", "link", "features"} <= set(info):
         raise AppInfoError(f"{where}: one_liner, problem, facts, link, features 가 있어야 하고 모르는 키가 없어야 합니다 "
@@ -140,6 +142,7 @@ def parse_app(item: dict) -> AppInfo | None:
         how=_text(info.get("how") or info["one_liner"], f"{where}.how", 200),
         facts=_texts(info["facts"], f"{where}.facts", required=True),
         limits=_texts(info.get("limits"), f"{where}.limits"),
+        stories=tuple(_text(s, f"{where}.stories", 300) for s in info.get("stories") or []),
         launch_media=tuple(info.get("launch_media") or ()),
         features=tuple(features), updates=tuple(updates),
         questions=_texts(info.get("questions"), f"{where}.questions"),
@@ -247,7 +250,8 @@ def build_payload(subject: dict, post_type: str) -> dict:
     app: AppInfo = subject["app"]
     payload = {"subject": subject["key"],
                "app": {"name": app.name, "one_liner": app.one_liner, "audience": app.audience,
-                       "problem": app.problem, "how": app.how, "facts": list(app.facts), "limits": list(app.limits)}}
+                       "problem": app.problem, "how": app.how, "facts": list(app.facts), "limits": list(app.limits),
+                       "stories": list(app.stories)}}
     if post_type == "launch":
         payload["features"] = [{"name": f.name, "desc": f.desc} for f in app.features]
     elif post_type == "feature":

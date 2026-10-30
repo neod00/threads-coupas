@@ -320,8 +320,9 @@ def test_test_start_date_parsed(raw):
 # ── 계정별 설정: tone·talk_topics·reply_delay_hours (2026-10-18) ──────────────
 
 def _raw_config():
-    import yaml
-    return yaml.safe_load(settings.PROJECT_ROOT.joinpath("config.yaml").read_text(encoding="utf-8"))
+    # 쿠팡 계정 기준 설정 (openbrain 은 2026-10-30 반말 앱 계정이 됐다)
+    from conftest import coupang_raw
+    return coupang_raw()
 
 
 def test_account_options_default_to_existing_behaviour():

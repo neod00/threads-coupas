@@ -64,7 +64,9 @@ openbrain7777 은 쿠팡 글을 그만두고(10-30 발행 중단) 내가 만든 
 
 - 글감은 `data/apps.yaml` 의 앱별 `info`(사람이 확인한 사실) 뿐이다. 글의 사실·숫자는 여기 있는 것만 쓴다 (`app_posts.py`, 가드 G3, 검수 R7).
 - 글 유형: `launch`(앱마다 한 번, 시연 영상+캡처) · `feature`(기능 하나, 캡처, 5번에 1번 시연 영상) · `devlog`(info.updates 에 사람이 적은 실제 변경만, 없으면 만들지 않음) · `ask`(질문). 하루 3개 = 링크 글 1 + 링크 없는 글 2.
-- 링크는 첫 답글에만, 첫 줄은 `disclosure_text`("제가 만든 앱이에요.") — 규칙 3 의 대가성 문구 자리. 링크는 apps.yaml 에 등록한 내 앱 주소만 통과한다.
+- 링크는 첫 답글에만, 첫 줄은 `disclosure_text`("내가 만든 앱이야.") — 규칙 3 의 대가성 문구 자리. 링크는 apps.yaml 에 등록한 내 앱 주소만 통과한다.
+- 말투는 반말 (10-30 사용자 결정). 인기 1인 개발 글 분석에 따라 첫 줄 고백·질문·반전, 짧은 줄 3~7개, 대화를 여는 끝맺음.
+  만든 사람의 1인칭 경험은 info.stories 에 사람이 적은 것만 쓴다.
 - 지어낸 경험·감정·기간·사용자 수·후기, 보안 장담, 다른 앱 비하, 재촉은 금지 (`prompts/app_base.md`, 검수 `prompts/reviewer_app.md`).
 - 검수 시험지는 `tests/review_cases_app/cases.json` (문제 글 20 + 정상 글 10). 합격 전에는 실제 발행을 거부한다 (규칙 9).
 - 쿠팡 계정(sabol.kka)은 그대로다. 쿠팡 시절 openbrain 설정은 `tests/fixtures/coupang_config.yaml` 에 남겨 테스트가 쓴다.

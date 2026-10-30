@@ -28,8 +28,9 @@ limits:
   max_urls: 1                 # 본문 URL + 링크 첨부 합계
 
 # ── 링크 답글 첫 줄 (규칙 3) ──────────────────────────────
-# 앱 링크가 있는 답글의 첫 줄은 이 문장과 정확히 같아야 한다. 내가 만든 앱이라는 사실을 밝힌다 ("제가 만든" 필수).
-disclosure_text: "제가 만든 앱이에요."
+# 앱 링크가 있는 답글의 첫 줄은 이 문장과 정확히 같아야 한다. 내가 만든 앱이라는 사실을 밝힌다 ("만든 앱" 필수).
+# 2026-10-30 사용자 결정: 스레드 성격에 맞게 반말
+disclosure_text: "내가 만든 앱이야."
 
 # ── 금지어 (규칙 7, Step 4) ───────────────────────────────
 # settings.REQUIRED_BANNED_WORDS 에 있는 필수 금지어는 여기서 빼도 항상 적용된다.
@@ -86,6 +87,9 @@ digest_time_kst: "21:00"          # 일일 요약 발송 시각 (Step 5)
 
 # 첫 실제 발행일 (YYYY-MM-DD). 주차 계산 기준. 앱 홍보 글이 처음 나가는 날로 사람이 정한다.
 test_start_date: null
+
+# 말투: 반말 (2026-10-30 사용자 결정. 인기 1인 개발 글 분석: 반말·짧은 줄·첫 줄 고백/질문, prompts/app_base.md)
+tone: casual
 
 # 만들 글 유형 (launch, feature, devlog, ask). 앱마다 소개(launch)는 한 번, 그 뒤로 기능(feature)이 링크 자리를 채운다.
 post_types: [launch, feature, devlog, ask]
