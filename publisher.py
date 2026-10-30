@@ -399,6 +399,21 @@ def publish_reply(post: dict, *, store, api, notifier, dry_run: bool, sleep=time
     return reply_id
 
 
+def expire_if_past_day(post: dict, *, store, now: datetime, dry_run: bool) -> bool:
+    """예약 날짜(KST)가 이미 지난 approved 글은 내보내지 않고 cancelled 로 바꾼다. 바꿨으면(또는 연습 모드에서 바꿀 글이면) True.
+    2026-10-28~30: 발행이 멈췄다 풀리며 밀린 글이 자정을 넘겨 다음 날 새벽에 나갔고, 그 글이 다음 날의 하루 한도를 먹어
+    그날 저녁 슬롯 글이 또 자정을 넘기는 일이 매일 반복됐다. 날짜가 지난 글은 버리고 그날 글만 낸다."""
+    if rules.kst_date(rules.post_time(post)) >= rules.kst_date(now):
+        return False
+    if dry_run:
+        log.info(f"[발행] 날짜가 지난 글이라 실제 실행이었다면 취소합니다: {post['id']} (예정 {post.get('scheduled_at')})")
+        return True
+    store.update_post(post["id"], {"status": "cancelled"})
+    store.log_event("expired", {"post_id": post["id"], "scheduled_at": post.get("scheduled_at"), "by": "publisher"})
+    log.warning(f"[발행] 날짜가 지난 글이라 내보내지 않고 취소합니다: {post['id']} (예정 {post.get('scheduled_at')})")
+    return True
+
+
 def run_once(store, cfg: Config, *, env=None, api, link_checker, notifier, now: datetime | None = None,
              exam_status: tuple[bool, str], sleep: Callable[[float], None] = time.sleep,
              reply_reader=None, media_host=None) -> dict:
@@ -436,8 +451,9 @@ def run_once(store, cfg: Config, *, env=None, api, link_checker, notifier, now: 
                 and reply_due(post, cfg, now)):
             publish_reply(post, store=store, api=api, notifier=notifier, dry_run=dry_run, sleep=sleep)
 
-    due = sorted((p for p in store.list_posts(["approved"])
-                  if rules.post_time(p) and rules.post_time(p) <= now), key=rules.post_time)
+    approved = [p for p in store.list_posts(["approved"]) if rules.post_time(p) and rules.post_time(p) <= now]
+    approved = [p for p in approved if not expire_if_past_day(p, store=store, now=now, dry_run=dry_run)]
+    due = sorted(approved, key=rules.post_time)
     if not due:
         return {"action": "nothing_due"}
     try:

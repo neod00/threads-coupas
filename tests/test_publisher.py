@@ -171,6 +171,42 @@ def test_min_gap_refused_then_published_later(cfg, setup):
     assert result["action"] == "published" and result["post_id"] == post["id"]
 
 
+# ── 날짜가 지난 글 (2026-10-30) ─────────────────────────────────────────────
+
+def kst_iso(*args):
+    return datetime(*args, tzinfo=KST).astimezone(timezone.utc).isoformat()
+
+
+def test_post_from_a_past_kst_day_is_cancelled_not_published(cfg, setup):
+    """어제 20:30 슬롯 글이 한도에 막혀 자정을 넘기면, 오늘 새벽에 내보내지 않고 취소한다 (오늘 한도를 먹지 않게)."""
+    stale = setup.add(scheduled_at=kst_iso(2026, 11, 2, 20, 30))
+    result, api = run(setup, cfg, now=datetime(2026, 11, 3, 0, 12, tzinfo=KST))
+    assert result["action"] == "nothing_due" and api.calls == []
+    assert setup.store.get_post(stale["id"])["status"] == "cancelled"
+    assert [e for e in setup.store.events if e["kind"] == "expired"][0]["detail"]["post_id"] == stale["id"]
+
+
+def test_stale_post_is_skipped_and_todays_post_goes_out_in_the_same_run(cfg, setup):
+    stale = setup.add(scheduled_at=kst_iso(2026, 11, 2, 15, 0))
+    today = setup.add()                                    # 11-03 08:10
+    result, _ = run(setup, cfg)
+    assert result["action"] == "published" and result["post_id"] == today["id"]
+    assert setup.store.get_post(stale["id"])["status"] == "cancelled"
+
+
+def test_late_post_on_the_same_kst_day_still_goes_out(cfg, setup):
+    post = setup.add(scheduled_at=kst_iso(2026, 11, 3, 0, 5))     # 같은 날 새벽 슬롯, 8시간 늦음
+    result, _ = run(setup, cfg)
+    assert result["action"] == "published" and result["post_id"] == post["id"]
+
+
+def test_dry_run_does_not_cancel_stale_post(cfg, setup):
+    stale = setup.add(scheduled_at=kst_iso(2026, 11, 2, 20, 30))
+    result, api = run(setup, cfg, env=DRY, api=publisher.DryRunApi("123"))
+    assert result["action"] == "nothing_due"
+    assert setup.store.get_post(stale["id"])["status"] == "approved"
+
+
 # ── 8장: 킬 스위치 → 즉시 종료 ───────────────────────────────────────────────
 
 class ExplodingStore:
