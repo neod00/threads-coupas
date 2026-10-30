@@ -1,0 +1,106 @@
+# 홍보할 내 앱 목록 (openbrain 계정, 2026-10-30). capture.py 가 이 목록대로 내 앱 화면을 찍고 시연 영상을 만들어
+# data/media/<앱 id>/ 에 저장한다 (목록은 media.json).
+#
+# 규칙 2 (남의 이미지·영상 금지): 캡처는 url 의 호스트(와 allowed_hosts)로만 이동한다. 다른 사이트로 넘어가면 그 화면은 실패.
+# 예시 파일(upload)은 data/app_samples/<앱 id>/ 안의 파일만 쓴다. 진짜 개인정보가 든 파일은 넣지 않는다 (공개 저장소).
+#
+# 단계(steps), 위에서부터 차례로 실행:
+#   goto: /경로               앱 주소 기준 경로로 이동
+#   click: CSS 선택자          누르기
+#   upload: {selector, file}  파일 입력에 예시 파일 넣기 (file 은 data/app_samples/<앱 id>/ 안 이름)
+#   fill: {selector, text}    입력칸 채우기
+#   type: 글자                키보드로 입력 (지금 초점 위치). 영상에서는 사람이 치는 속도로
+#   press: 키                 키 누르기 (예: Enter, Control+A). 여러 번: {key: Backspace, times: 10}
+#   wait: 밀리초              기다리기
+#   wait_for: CSS 선택자       그 요소가 보일 때까지 기다리기
+# 영상(clips)의 steps 에서만:
+#   zoom: {selector, scale}   그 요소 쪽으로 부드럽게 확대 (scale 1~3)
+#   unzoom: true              확대를 풀고 원래 화면으로
+#   caption: 문구             아래쪽 자막을 이 문구로 바꾼다 (장면 전환, 40자 이하)
+#   title: {text, sub}        화면 전체를 덮는 큰 훅 문구 1.7초 (첫 단계면 영상 첫 프레임 = 미리보기 그림)
+#   영상에서 click 은 누르는 곳에 동그란 표시가 퍼진 뒤 누르고, type 은 사람이 치는 속도로 입력한다.
+#
+# shots: 휴대폰 화면(390x844, 2배) 그대로 찍는다 (PNG 780x1688).
+# clips: 시연 영상 (MP4 780x1688, 30fps, 소리 없음, 30초 이하).
+#   setup 은 녹화 전 준비(영상에 안 나옴), steps 가 녹화되는 부분, caption 은 처음 자막(선택),
+#   end 는 마지막 2.2초 끝 화면 {title, sub, cta(선택, 버튼 모양 문구), color}. 모든 문구는 금지어 검사를 거친다.
+
+apps:
+  - id: pdfmonster
+    name: PdfMonster
+    url: https://pdfmonster.xyz/
+    shots:
+      - id: home
+        feature: 첫 화면 — 파일이 서버로 올라가지 않는 무료 PDF 편집기
+        steps:
+          - goto: /
+          - wait: 1500
+      - id: editor
+        feature: PDF를 연 편집 화면 — 글자 수정·도형·서명·가림 도구
+        steps:
+          - goto: /
+          - upload: {selector: "#fileInput", file: contract-sample.pdf}
+          - wait_for: '[aria-label^="줄 수정"]'
+          - wait: 1500
+      - id: edit-text
+        feature: 글자 수정 — PDF 글자를 그 자리에서 고치기
+        steps:
+          - goto: /
+          - upload: {selector: "#fileInput", file: contract-sample.pdf}
+          - wait_for: '[aria-label="줄 수정: 계약 금액: 1,000,000원"]'
+          - click: '[aria-label="줄 수정: 계약 금액: 1,000,000원"]'
+          - wait: 800
+          - press: End
+          - press: {key: Backspace, times: 10}
+          - type: "2,500,000원"
+          - wait: 1000
+      - id: search
+        feature: 찾기 — 글자 찾기와 개인정보 자동 찾아 가리기
+        steps:
+          - goto: /
+          - upload: {selector: "#fileInput", file: contract-sample.pdf}
+          - wait_for: '[aria-label^="줄 수정"]'
+          - click: "#btnSearch"
+          - wait: 1200
+    clips:
+      - id: edit-text-demo
+        feature: 글자 수정·개인정보 가림 시연 — 계약서 금액을 고치고 이름을 찾아 가리는 장면
+        end: {title: PdfMonster, sub: 무료 · 가입 없음 · 파일 업로드 없음, cta: 링크는 댓글에 있어요}
+        setup:
+          - goto: /
+          - upload: {selector: "#fileInput", file: contract-sample.pdf}
+          - wait_for: '[aria-label="줄 수정: 계약 금액: 1,000,000원"]'
+          - wait: 500
+        steps:
+          # 장면 1: 훅 (첫 프레임 = 미리보기 그림)
+          - title: {text: "PDF 글자 하나 고치려고\n프로그램 까셨어요?", sub: 브라우저에서 바로 돼요}
+          # 장면 2: 글자 수정
+          - caption: 고칠 줄을 누르고
+          - zoom: {selector: '[aria-label="줄 수정: 계약 금액: 1,000,000원"]', scale: 1.9}
+          - wait: 900
+          - click: '[aria-label="줄 수정: 계약 금액: 1,000,000원"]'
+          - wait: 300
+          - caption: 그 자리에서 바로 고쳐요
+          - press: End
+          - press: {key: Backspace, times: 10}
+          - type: "2,500,000원"
+          - wait: 600
+          - press: Enter
+          - wait: 300
+          # 장면 3: 개인정보 찾아 가리기
+          - unzoom: true
+          - caption: 이름·전화번호도 찾아서 가려요
+          - wait: 700
+          - click: "#btnSearch"
+          - wait: 400
+          - click: "#searchInput"
+          - type: 홍길동
+          - click: "#searchRun"
+          - wait: 700
+          - click: "#searchRedactAll"
+          - wait: 500
+          - click: "#searchClose"
+          - wait: 300
+          - zoom: {selector: '[aria-label="줄 수정: 계약서"]', scale: 2.2}
+          - caption: 파일은 내 브라우저 밖으로 안 나가요
+          - wait: 1600

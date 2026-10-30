@@ -102,6 +102,11 @@ def test_referenced_secrets_exist_in_env_example(name):
 
 @pytest.mark.parametrize("name", WORKFLOWS)
 def test_least_privilege(name):
+    # 캡처만 그림을 커밋하려고 contents: write. 대신 비밀값을 하나도 읽지 않는다
+    if name == "capture.yml":
+        assert load(name)["permissions"] == {"contents": "write"}
+        assert "secrets" not in (WF_DIR / name).read_text(encoding="utf-8")
+        return
     assert load(name)["permissions"] == {"contents": "read"}
 
 
@@ -177,6 +182,11 @@ def test_referenced_secrets_exist_in_env_example(name):
 
 @pytest.mark.parametrize("name", WORKFLOWS)
 def test_least_privilege(name):
+    # 캡처만 그림을 커밋하려고 contents: write. 대신 비밀값을 하나도 읽지 않는다
+    if name == "capture.yml":
+        assert load(name)["permissions"] == {"contents": "write"}
+        assert "secrets" not in (WF_DIR / name).read_text(encoding="utf-8")
+        return
     assert load(name)["permissions"] == {"contents": "read"}
 
 

@@ -14,7 +14,8 @@
       - 코드 가드 재실행 (규칙 3 대가성 문구 포함) → 실패하면 held
       - 하루 최대 개수·최소 간격 (실제 발행 기록 기준, 규칙 5) → 어기면 이번에는 발행하지 않고 다음 실행을 기다림
       - 링크 형식 확인 (https + 쿠팡 간편링크 도메인, HTTP 요청 없음) → 실패하면 held
-  7 컨테이너 생성 → 상태 확인 → 발행 → threads_media_id 즉시 저장 → (link_in_reply) 답글
+  7 (이미지·영상 글) 파일을 공개 버킷에 올림 → 컨테이너 생성(2개 이상이면 항목마다 + 캐러셀) → 상태 확인 → 발행
+    → threads_media_id 즉시 저장 → (link_in_reply) 답글
 DRY_RUN=true 면 API 를 부르지 않고 보낼 요청 내용만 로그에 남기며 DB 도 바꾸지 않는다 (규칙 9).
 
 오류: 네트워크 오류만 1회 재시도. 그 외 실패는 status=failed + 로그, 자동 재발행 안 함. 2회 연속 실패 → 자동 정지.
@@ -35,6 +36,7 @@ from urllib.parse import urlparse
 import autostop
 import guard
 import rules
+from media import MediaHostError, kind_of
 from settings import HARD_MAX_POSTS_PER_DAY, Config
 
 log = logging.getLogger("threads_coupas")
@@ -43,8 +45,12 @@ API_BASE = "https://graph.threads.net/v1.0"
 FIRST_WAIT_SECONDS = 30          # 문서 권장: 컨테이너 생성 후 평균 30초 기다렸다가 발행
 POLL_WAIT_SECONDS = 10
 MAX_POLLS = 6
-# 규칙 2: 텍스트 + 링크 미리보기만. 이 키만 요청에 들어갈 수 있다.
-ALLOWED_PARAMS = {"media_type", "text", "link_attachment", "topic_tag", "reply_to_id"}
+VIDEO_MAX_POLLS = 30             # 영상은 Threads 처리가 오래 걸린다: 30초 + 10초 × 30 = 5분 반까지 기다린다
+# 규칙 2: 텍스트 + 링크 미리보기, 그리고 allow_media 계정의 자기 이미지·영상(media.py, 2026-10-30). 이 키만 요청에 들어갈 수 있다.
+ALLOWED_PARAMS = {"media_type", "text", "link_attachment", "topic_tag", "reply_to_id", "image_url", "video_url",
+                  "is_carousel_item", "children"}
+MEDIA_TYPES = {"TEXT", "IMAGE", "VIDEO", "CAROUSEL"}
+URL_PARAM = {"IMAGE": "image_url", "VIDEO": "video_url"}
 
 
 class PublishRefused(Exception):
@@ -61,12 +67,21 @@ class ThreadsApiError(Exception):
 
 # ── 요청 만들기 (규칙 2·6) ────────────────────────────────────────────────
 
-def container_params(post: dict, *, reply_to_id: str | None = None) -> dict:
-    """본문(reply_to_id=None) 또는 링크 답글의 컨테이너 파라미터. media_type 은 TEXT 고정."""
+def container_params(post: dict, *, reply_to_id: str | None = None, items=(), children=()) -> dict:
+    """본문(reply_to_id=None) 또는 링크 답글의 컨테이너 파라미터. items = [(IMAGE|VIDEO, 공개 주소), ...].
+    본문은 0개 TEXT, 1개 IMAGE·VIDEO, 2개 이상 CAROUSEL(children = 먼저 만든 항목 컨테이너 ID). 답글은 TEXT 고정."""
     if reply_to_id is None:
-        params = {"media_type": "TEXT", "text": post["text"]}
-        if post.get("variant") == "link_in_body" and post.get("link_url"):
-            params["link_attachment"] = post["link_url"]
+        if not items:
+            params = {"media_type": "TEXT", "text": post["text"]}
+            if post.get("variant") == "link_in_body" and post.get("link_url"):
+                params["link_attachment"] = post["link_url"]
+        elif len(items) == 1:
+            kind, url = items[0]
+            params = {"media_type": kind, URL_PARAM[kind]: url, "text": post["text"]}
+        else:
+            if len(children) != len(items):
+                raise PublishRefused("캐러셀은 항목마다 컨테이너를 먼저 만들어야 합니다")
+            params = {"media_type": "CAROUSEL", "children": ",".join(children), "text": post["text"]}
         if post.get("topic_tag"):
             params["topic_tag"] = post["topic_tag"]
     else:
@@ -77,9 +92,14 @@ def container_params(post: dict, *, reply_to_id: str | None = None) -> dict:
         if post.get("link_url"):
             params["link_attachment"] = post["link_url"]
     extra = set(params) - ALLOWED_PARAMS
-    if extra or params["media_type"] != "TEXT":
-        raise PublishRefused(f"규칙 2: 텍스트 외 요청은 만들지 않습니다: {sorted(extra)}")
+    if extra or params["media_type"] not in MEDIA_TYPES or (reply_to_id is not None and params["media_type"] != "TEXT"):
+        raise PublishRefused(f"규칙 2: 허용되지 않은 요청은 만들지 않습니다: {params['media_type']} {sorted(extra)}")
     return params
+
+
+def carousel_item_params(kind: str, url: str) -> dict:
+    """캐러셀의 이미지·영상 한 개 컨테이너. 글은 캐러셀 컨테이너에만 넣는다."""
+    return {"media_type": kind, URL_PARAM[kind]: url, "is_carousel_item": "true"}
 
 
 # ── API ─────────────────────────────────────────────────────────────────
@@ -197,12 +217,43 @@ def _once_more_on_network_error(fn, *args):
         return fn(*args)
 
 
-def publish_container(api, params: dict, sleep: Callable[[float], None], wait: bool = True) -> str:
+def publish_container(api, params: dict, sleep: Callable[[float], None], wait: bool = True,
+                      max_polls: int = MAX_POLLS) -> str:
     """컨테이너 생성 → 상태 FINISHED 확인 → 발행. 미디어 ID 를 돌려준다."""
     container = _once_more_on_network_error(api.create_container, params)
     if wait:
         sleep(FIRST_WAIT_SECONDS)
-    for poll in range(MAX_POLLS):
+    wait_finished(api, container, sleep, wait, max_polls)
+    try:
+        return api.publish(container)
+    except NetworkError as e:
+        # 요청은 서버에서 성공했을 수 있다. 컨테이너가 아직 FINISHED 일 때만 한 번 더 발행한다.
+        log.warning(f"[발행] 발행 요청 네트워크 오류: {e}")
+        status, _ = api.container_status(container)
+        if status != "FINISHED":
+            raise ThreadsApiError(f"발행 요청 오류 후 컨테이너 상태 {status} — 중복 방지를 위해 재시도하지 않습니다")
+        return api.publish(container)
+
+
+def publish_media(api, post: dict, items: list[tuple[str, str]], sleep: Callable[[float], None],
+                  wait: bool = True) -> str:
+    """본문 발행. items 가 2개 이상이면 항목 컨테이너를 먼저 만들고 처리가 끝난 뒤 캐러셀로 묶는다.
+    영상이 있으면 처리 완료를 더 오래 기다린다."""
+    polls = VIDEO_MAX_POLLS if any(kind == "VIDEO" for kind, _ in items) else MAX_POLLS
+    children = []
+    if len(items) > 1:
+        children = [_once_more_on_network_error(api.create_container, carousel_item_params(k, u)) for k, u in items]
+        if wait:
+            sleep(FIRST_WAIT_SECONDS)
+        for child in children:
+            wait_finished(api, child, sleep, wait, polls)
+    return publish_container(api, container_params(post, items=items, children=children), sleep, wait, polls)
+
+
+def wait_finished(api, container: str, sleep: Callable[[float], None], wait: bool = True,
+                  max_polls: int = MAX_POLLS) -> None:
+    """컨테이너가 FINISHED 가 될 때까지 확인한다. 실패·만료·이미 발행됨이면 ThreadsApiError."""
+    for poll in range(max_polls):
         status, error = _once_more_on_network_error(api.container_status, container)
         if status == "FINISHED":
             break
@@ -214,16 +265,7 @@ def publish_container(api, params: dict, sleep: Callable[[float], None], wait: b
         if wait:
             sleep(POLL_WAIT_SECONDS)
     else:
-        raise ThreadsApiError(f"컨테이너가 {MAX_POLLS}번 확인하는 동안 FINISHED 가 되지 않았습니다")
-    try:
-        return api.publish(container)
-    except NetworkError as e:
-        # 요청은 서버에서 성공했을 수 있다. 컨테이너가 아직 FINISHED 일 때만 한 번 더 발행한다.
-        log.warning(f"[발행] 발행 요청 네트워크 오류: {e}")
-        status, _ = api.container_status(container)
-        if status != "FINISHED":
-            raise ThreadsApiError(f"발행 요청 오류 후 컨테이너 상태 {status} — 중복 방지를 위해 재시도하지 않습니다")
-        return api.publish(container)
+        raise ThreadsApiError(f"컨테이너가 {max_polls}번 확인하는 동안 FINISHED 가 되지 않았습니다")
 
 
 # ── 링크 확인 ─────────────────────────────────────────────────────────────
@@ -267,9 +309,9 @@ def _hold(store, post: dict, stage: str, problems: list[str]) -> dict:
 
 
 def publish_post(post: dict, *, store, cfg: Config, api, link_checker, notifier, now: datetime,
-                 dry_run: bool, sleep: Callable[[float], None] = time.sleep) -> dict:
+                 dry_run: bool, sleep: Callable[[float], None] = time.sleep, media_host=None) -> dict:
     """글 1개를 검사하고 발행한다. 결과 dict: {"action": skipped|held|published|dry_run|failed, ...}.
-    승인되지 않았거나 규칙 5 를 어기면 PublishRefused."""
+    승인되지 않았거나 규칙 5 를 어기면 PublishRefused. 이미지·영상 글은 media_host 가 공개 주소를 만든다 (media.py)."""
     if post.get("threads_media_id"):
         return {"action": "skipped", "reason": "이미 발행됨 (threads_media_id 있음)", "post_id": post["id"]}
     if post.get("status") != "approved":
@@ -294,9 +336,13 @@ def publish_post(post: dict, *, store, cfg: Config, api, link_checker, notifier,
                 _hold(store, post, "link", [link_problem])
             return {"action": "held", "problems": [link_problem], "post_id": post["id"]}
 
+    names = post.get("media") or []
+    if names and media_host is None:
+        raise PublishRefused("이미지·영상 글인데 파일을 올릴 곳(media_host)이 없습니다")
     try:
-        media_id = publish_container(api, container_params(post), sleep, wait=not dry_run)
-    except (ThreadsApiError, NetworkError) as e:
+        items = [(kind_of(name), media_host.public_url(name)) for name in names]
+        media_id = publish_media(api, post, items, sleep, wait=not dry_run)
+    except (ThreadsApiError, NetworkError, MediaHostError) as e:
         log.error(f"[발행] 실패 → failed (자동 재발행 안 함): {e}")
         if not dry_run:
             store.update_post(post["id"], {"status": "failed"})
@@ -355,7 +401,7 @@ def publish_reply(post: dict, *, store, api, notifier, dry_run: bool, sleep=time
 
 def run_once(store, cfg: Config, *, env=None, api, link_checker, notifier, now: datetime | None = None,
              exam_status: tuple[bool, str], sleep: Callable[[float], None] = time.sleep,
-             reply_reader=None) -> dict:
+             reply_reader=None, media_host=None) -> dict:
     """publish.yml 한 번 실행분. 킬 스위치는 main 에서도 먼저 확인하지만 여기서도 다시 본다.
     reply_reader: 답글을 읽을 API (conversation). 있으면 발행 전에 답글 감시를 먼저 돌린다 (규칙 10-1)."""
     from settings import auto_publish_disabled, dry_run as dry_run_flag
@@ -396,7 +442,7 @@ def run_once(store, cfg: Config, *, env=None, api, link_checker, notifier, now: 
         return {"action": "nothing_due"}
     try:
         return publish_post(due[0], store=store, cfg=cfg, api=api, link_checker=link_checker, notifier=notifier,
-                            now=now, dry_run=dry_run, sleep=sleep)
+                            now=now, dry_run=dry_run, sleep=sleep, media_host=media_host)
     except PublishRefused as e:
         log.warning(f"[발행] 이번 실행에서는 발행하지 않습니다: {e}")
         return {"action": "refused", "reason": str(e), "post_id": due[0]["id"]}
@@ -434,8 +480,11 @@ def main() -> int:
     # 답글 감시는 읽기만 하므로 연습 모드에서도 토큰이 있으면 실제 API 로 돈다
     reader = (ThreadsApi(secrets.threads_user_id, secrets.threads_access_token)
               if secrets.threads_user_id and secrets.threads_access_token else None)
+    import media
+    media_host = (media.DryRunMediaHost() if dry_run()
+                  else media.SupabaseMediaHost(secrets.supabase_url, secrets.supabase_service_role_key))
     result = run_once(store, cfg, api=api, link_checker=check_link, notifier=make_notifier(secrets),
-                      exam_status=exam.exam_status(cfg), reply_reader=reader)
+                      exam_status=exam.exam_status(cfg), reply_reader=reader, media_host=media_host)
     log.info(f"결과: {json.dumps(result, ensure_ascii=False)}")
     return 0 if result["action"] != "failed" else 1
 

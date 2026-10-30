@@ -1,7 +1,7 @@
 """
 코드 가드 (PLAN v2 Step 4). 로옥션 scripts/column_guard.py 의 숫자 검사를 옮겼다.
 
-check_post(post, cfg) → 문제 목록 (빈 목록 = 통과). 문제마다 항목 코드 [G1]~[G8] 를 붙여
+check_post(post, cfg) → 문제 목록 (빈 목록 = 통과). 문제마다 항목 코드 [G1]~[G9] 를 붙여
 생성기 피드백·guard_log·주간 리포트의 항목별 실패 빈도에 그대로 쓴다.
 
   G1  전체 길이 max_chars(500) 이하, 이모지 없음 (본문·답글)
@@ -12,6 +12,7 @@ check_post(post, cfg) → 문제 목록 (빈 목록 = 통과). 문제마다 항�
   G6  calc·compare 는 assumption_text 를 그대로 포함
   G7  훅(링크 글 둘째 줄, tip 첫 줄) 30자 이하, calc·compare 훅은 calc_payload 숫자 1개 이상
   G8  금지 훅 문구(banned_hook_phrases)가 본문·답글 어디에도 없음
+  G9  이미지·영상은 allow_media 계정의 data/media/ 파일만, JPEG·PNG 8MB·MP4 50MB 이하 20개 이하, 링크는 답글에만 (규칙 2, media.py)
 
 column_guard.py 와 다른 점: 0~12 를 무조건 허용하지 않는다. PLAN 규칙 7 은 "입력 데이터와 계산 결과에 있는 값만"이므로
 하루 사용시간·월 사용일수·누진 단계도 calc_payload 에 들어 있어야 허용된다. 사건번호 처리는 뺐다.
@@ -23,6 +24,7 @@ from __future__ import annotations
 
 import re
 
+import media
 from settings import Config
 
 HOOK_MAX_CHARS = 30
@@ -228,6 +230,9 @@ def check_post(post: dict, cfg: Config) -> list[str]:
         found = [p for p in cfg.banned_hook_phrases if p in part]
         if found:
             problems.append(f"[G8] {name}에 금지 훅 문구: {', '.join(found)}")
+
+    # G9 이미지·영상 (규칙 2, 2026-10-30): 허용된 계정의 자기 폴더 파일만
+    problems += media.media_problems(post, cfg)
 
     return problems
 

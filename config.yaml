@@ -84,3 +84,7 @@ test_start_date: 2026-10-18   # 2026-10-16 PLAN v4(참여형·시즌 모음·진
 # 만들 글 유형 (calc, compare, pick, bundle, talk, tip 중에서). 2026-10-16 사용자 결정: 팁·계산·비교 글은 재미없어서 중단.
 # 링크 글 2자리 = 소개(pick)·시즌 모음(bundle, 이틀에 한 번), 링크 없는 2자리 = 참여형(talk).
 post_types: [pick, bundle, talk]
+
+# 게시물 이미지·영상 (규칙 2, 2026-10-30 사용자 결정). openbrain 은 자기 앱 홍보 계정이 되므로 data/media/ 의 앱 캡처·시연 영상을 붙일 수 있다.
+# 사용자가 직접 넣은 파일만 쓴다 (media.py, 가드 G9). 쿠팡 계정(sabolkka)은 기본값 false 그대로.
+allow_media: true

@@ -390,10 +390,13 @@ def test_guard_rerun_at_publish_holds_edited_post(cfg, setup):
     assert any("[G2]" in p for p in result["problems"])
 
 
-def test_request_params_are_text_only(make_post):
+def test_request_params_ignore_media_fields_in_post(make_post):
+    # 규칙 2: 글 행에 남의 이미지·영상 주소가 섞여 있어도 요청에 들어가지 않는다.
+    # 이미지·영상은 media.py 가 data/media/ 파일을 올려 만든 items 로만 붙는다
     post = make_post(image_url="https://example.com/a.jpg", video_url="x", children=["1"])
     params = publisher.container_params(post)
-    assert set(params) <= publisher.ALLOWED_PARAMS and params["media_type"] == "TEXT"
+    assert set(params) <= publisher.ALLOWED_PARAMS and params == {"media_type": "TEXT", "text": post["text"],
+                                                                   "link_attachment": post["link_url"]}
 
 
 def test_reply_only_to_own_post(make_post):

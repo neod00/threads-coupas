@@ -28,6 +28,7 @@ create table if not exists posts (
   published_at     timestamptz,
   threads_media_id text unique,              -- 멱등성 키
   threads_reply_id text,
+  media            text[] not null default '{}',   -- 2026-10-30: data/media/ 파일 이름 (allow_media 계정만, media.py)
   created_at       timestamptz not null default now()
 );
 create index if not exists posts_status_scheduled on posts (status, scheduled_at);

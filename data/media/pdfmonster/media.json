@@ -1,0 +1,32 @@
+{
+  "home": {
+    "file": "pdfmonster/home.png",
+    "kind": "image",
+    "feature": "첫 화면 — 파일이 서버로 올라가지 않는 무료 PDF 편집기",
+    "captured_at": "2026-10-30T12:04:57+00:00"
+  },
+  "editor": {
+    "file": "pdfmonster/editor.png",
+    "kind": "image",
+    "feature": "PDF를 연 편집 화면 — 글자 수정·도형·서명·가림 도구",
+    "captured_at": "2026-10-30T12:04:57+00:00"
+  },
+  "edit-text": {
+    "file": "pdfmonster/edit-text.png",
+    "kind": "image",
+    "feature": "글자 수정 — PDF 글자를 그 자리에서 고치기",
+    "captured_at": "2026-10-30T12:04:57+00:00"
+  },
+  "search": {
+    "file": "pdfmonster/search.png",
+    "kind": "image",
+    "feature": "찾기 — 글자 찾기와 개인정보 자동 찾아 가리기",
+    "captured_at": "2026-10-30T12:04:57+00:00"
+  },
+  "edit-text-demo": {
+    "file": "pdfmonster/edit-text-demo.mp4",
+    "kind": "video",
+    "feature": "글자 수정·개인정보 가림 시연 — 계약서 금액을 고치고 이름을 찾아 가리는 장면",
+    "captured_at": "2026-10-30T12:25:18+00:00"
+  }
+}

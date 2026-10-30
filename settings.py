@@ -367,6 +367,8 @@ class Config:
     reply_delay_hours: float = 0.0
     # 일일 요약에 상품 링크 보충·발행 수 증가 알림을 넣을지 (ops_advice.py)
     ops_advice: bool = False
+    # 게시물에 이미지·영상을 붙일 수 있는지 (규칙 2, 2026-10-30). 앱 홍보 계정의 자기 앱 캡처·시연 영상용. 쿠팡 계정은 false (media.py)
+    allow_media: bool = False
 
 
 def provider_of(model: str) -> str:
@@ -543,6 +545,9 @@ def parse_config(raw) -> Config:
     ops_advice = raw.get("ops_advice", Config.ops_advice)
     if not isinstance(ops_advice, bool):
         raise ConfigError(f"ops_advice 는 true/false 여야 합니다: {ops_advice!r}")
+    allow_media = raw.get("allow_media", Config.allow_media)
+    if not isinstance(allow_media, bool):
+        raise ConfigError(f"allow_media 는 true/false 여야 합니다: {allow_media!r}")
     return Config(
         max_posts_per_day=max_posts,
         min_gap_hours=min_gap,
@@ -563,6 +568,7 @@ def parse_config(raw) -> Config:
         talk_topics=tuple(t.strip() for t in topics),
         reply_delay_hours=float(delay),
         ops_advice=ops_advice,
+        allow_media=allow_media,
     )
 
 
