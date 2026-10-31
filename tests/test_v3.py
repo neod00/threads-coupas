@@ -170,10 +170,10 @@ def test_post_types_limit_plan(cfg):
 
 
 def test_project_config_is_app_account():
-    # 2026-10-30: openbrain 은 앱 홍보 계정 (쿠팡 글을 만들지 않는다)
-    from settings import APP_POST_TYPES, load_config
+    # 2026-10-30: openbrain 은 앱 홍보 계정 (쿠팡 글을 만들지 않는다). 2026-10-31 질문 글(ask)은 껐다.
+    from settings import load_config
     cfg = load_config()
-    assert cfg.content == "app" and cfg.post_types == APP_POST_TYPES
+    assert cfg.content == "app" and cfg.post_types == ("launch", "feature", "devlog")
 
 
 def test_post_types_validation():

@@ -37,7 +37,8 @@ MP4 = b"\0\0\0\x20ftypisom" + b"\0" * 32
 
 @pytest.fixture
 def app_cfg():
-    return settings.load_config()           # 실제 openbrain 설정 (content: app)
+    # 실제 openbrain 설정 (content: app). 운영은 일부 유형만 켜 둘 수 있다 (2026-10-31 ask 끔). 테스트는 모든 유형을 켜고 규칙을 본다.
+    return dataclasses.replace(settings.load_config(), post_types=settings.APP_POST_TYPES)
 
 
 @pytest.fixture
@@ -128,6 +129,16 @@ def test_plan_day_launch_first_then_feature(app_cfg, apps):
     assert app_posts.plan_day([], app_cfg, TOMORROW, apps, []) == ["launch", "devlog", "ask"]
     launched = [used_post("launch", "launch|demo-pdf")]
     assert app_posts.plan_day([], app_cfg, TOMORROW, apps, launched) == ["feature", "devlog", "ask"]
+
+
+def test_real_config_introduces_app_directly(apps):
+    # 2026-10-31: 질문으로 빌드업하는 글(ask)은 쓰지 않는다. 고친 것이 없으면 링크 글 하나만.
+    cfg = settings.load_config()
+    assert "ask" not in cfg.post_types
+    assert app_posts.plan_day([], cfg, TOMORROW, apps, []) == ["launch", "devlog"]
+    raw_none = dataclasses.replace(apps[0], updates=())
+    launched = [used_post("launch", "launch|demo-pdf")]
+    assert app_posts.plan_day([], cfg, TOMORROW, (raw_none,), launched) == ["feature"]
 
 
 def test_plan_day_without_updates_uses_only_questions(app_cfg, raw_app):

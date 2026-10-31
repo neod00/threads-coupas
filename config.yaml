@@ -8,6 +8,7 @@ content: app
 
 # ── 발행 규칙 (규칙 5, Step 5) ─────────────────────────────
 # 2026-10-30: 하루 3개 = 링크 글 1개(앱 소개·기능) + 링크 없는 글 2개(개발 일지·질문)
+# 2026-10-31: 질문 글(ask)을 뺐다. 링크 글 1개 + 개발 일지(info.updates 에 적은 것이 있을 때만). 대개 하루 1개다.
 max_posts_per_day: 3
 min_gap_hours: 2              # 코드 최소값 2보다 작으면 로드 실패
 # 반드시 따옴표로 감싼다 (따옴표가 없으면 YAML이 12:30을 숫자 750으로 읽는다).
@@ -92,7 +93,8 @@ test_start_date: null
 tone: casual
 
 # 만들 글 유형 (launch, feature, devlog, ask). 앱마다 소개(launch)는 한 번, 그 뒤로 기능(feature)이 링크 자리를 채운다.
-post_types: [launch, feature, devlog, ask]
+# ask 는 2026-10-31 뺐다: 팔로워 없는 계정이 질문으로 빌드업하면 의도적으로 보인다 (사람 판단). 앱을 바로 소개한다.
+post_types: [launch, feature, devlog]
 
 # 게시물 이미지·영상 (규칙 2 예외, PLAN 1-1). data/media/ 의 내 앱 캡처·시연 영상만 붙인다 (media.py, 가드 G9).
 allow_media: true
