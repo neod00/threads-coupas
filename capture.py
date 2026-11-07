@@ -42,7 +42,7 @@ from urllib.parse import urljoin, urlparse
 import yaml
 
 import media
-from settings import ACCOUNT_DIR
+from settings import ACCOUNT_DIR, contains_term
 
 log = logging.getLogger("threads_coupas")
 
@@ -58,6 +58,8 @@ SCALE = 2
 STEP_TIMEOUT_MS = 20_000
 MAX_WAIT_MS = 15_000
 MAX_CLIP_SECONDS = 30
+# 브라우저 언어. 영어 계정(lang: en)은 영어 화면을 찍는다 (2026-11-07)
+LOCALES = {"ko": "ko-KR", "en": "en-US"}
 MAX_TEXT_CHARS = 40
 TYPE_DELAY_MS = 120             # 영상에서 글자가 하나씩 써지는 속도
 PRESS_DELAY_MS = 50
@@ -338,13 +340,13 @@ def clip_texts(clip: Clip) -> list[str]:
     return [t for t in texts if t]
 
 
-def banned_text_problems(apps, banned_words) -> list[str]:
+def banned_text_problems(apps, banned_words, lang: str = "ko") -> list[str]:
     """영상 문구의 금지어 (가드 G4 와 같은 목록)."""
     problems = []
     for app in apps:
         for clip in app.clips:
             for text in clip_texts(clip):
-                found = [w for w in banned_words if w in text]
+                found = [w for w in banned_words if contains_term(text, w, lang)]
                 if found:
                     problems.append(f"{app.id}/{clip.id}: 금지어 {', '.join(found)} — \"{text}\"")
     return problems
@@ -527,11 +529,11 @@ def save_clip(app: App, clip: Clip, mp4: Path, media_dir: Path, now: datetime) -
 
 # ── 실행 ───────────────────────────────────────────────────────────────────
 
-def _open(browser, app: App, blocked: list[str]):
+def _open(browser, app: App, blocked: list[str], locale: str = "ko-KR"):
     """새 브라우저 창. 규칙 2: 앱 밖의 페이지로는 이동하지 않는다 (글꼴·스크립트 같은 부속 요청은 그대로 둔다).
     is_mobile 은 끈다: 켜면 확대한 내용 때문에 화면 기준이 넓어져 자막·끝 화면이 밀린다 (2026-10-30 시험)."""
     context = browser.new_context(viewport=VIEWPORT, device_scale_factor=SCALE, is_mobile=False, has_touch=True,
-                                  locale="ko-KR")
+                                  locale=locale)
     page = context.new_page()
 
     def guard(route, request):
@@ -546,7 +548,8 @@ def _open(browser, app: App, blocked: list[str]):
 
 
 def capture(apps, *, browser, media_dir: Path | None = None, samples_dir: Path | None = None,
-            now: datetime | None = None, clips: bool | None = None, ffmpeg: str | None = None) -> dict:
+            now: datetime | None = None, clips: bool | None = None, ffmpeg: str | None = None,
+            locale: str = "ko-KR") -> dict:
     """앱의 화면을 찍고 영상을 만든다. clips: True 면 영상을 모두 다시, False 면 영상은 건너뜀,
     None 이면 파일이 없거나 같은 앱 화면이 바뀐 영상만. 결과: {"saved": [...], "unchanged": [...], "failed": {id: 이유}}."""
     media_dir = media_dir or media.MEDIA_DIR
@@ -555,7 +558,7 @@ def capture(apps, *, browser, media_dir: Path | None = None, samples_dir: Path |
 
     def attempt(name: str, work) -> bool | None:
         blocked: list[str] = []
-        context, page = _open(browser, app, blocked)
+        context, page = _open(browser, app, blocked, locale)
         try:
             outcome = work(context, page)
             if blocked:
@@ -634,7 +637,7 @@ def main(argv=None) -> int:
     except CaptureError as e:
         log.error(f"apps.yaml 오류: {e}")
         return 1
-    banned = banned_text_problems(apps, cfg.banned_words)
+    banned = banned_text_problems(apps, cfg.banned_words, cfg.lang)
     if banned:
         log.error("apps.yaml 자막·끝 화면 문구에 금지어: " + " / ".join(banned))
         return 1
@@ -654,7 +657,8 @@ def main(argv=None) -> int:
     with sync_playwright() as p:
         browser = p.chromium.launch()
         try:
-            result = capture(apps, browser=browser, clips=True if args.clips else None)
+            result = capture(apps, browser=browser, clips=True if args.clips else None,
+                             locale=LOCALES.get(cfg.lang, LOCALES["ko"]))
         finally:
             browser.close()
     log.info(f"결과: {json.dumps(result, ensure_ascii=False)}")

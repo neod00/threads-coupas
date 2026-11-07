@@ -79,6 +79,9 @@ KST = timezone(timedelta(hours=9), "KST")
 HARD_MAX_POSTS_PER_DAY = 6      # 규칙 5 (2026-10-17 사용자 결정으로 5 → 6)
 HARD_MIN_GAP_HOURS = 2          # 규칙 5
 TONES = ("polite", "casual")
+# 글을 쓰는 언어 (2026-11-07, 영어 계정 openbrain_en). ko 가 기본이고 기존 계정은 모두 ko 다.
+# en 계정은 영어 필수 금지어·공개 문구·훅 길이·한글 금지(가드 G10)·영어 검수 프롬프트·영어 시험지를 쓴다.
+LANGS = ("ko", "en")
 MAX_REPLY_DELAY_HOURS = 12      # 답글이 너무 늦으면 글과 링크가 따로 논다 (재시도 주기 30분 포함)
 THREADS_MAX_CHARS = 500         # Threads API 텍스트 한도
 THREADS_MAX_LINKS = 5           # Threads API 글당 고유 링크 한도
@@ -96,6 +99,20 @@ REQUIRED_BANNED_WORDS = (
 # PLAN Step 3 금지 훅 문구. config 의 banned_hook_phrases 와 합쳐 쓴다.
 REQUIRED_BANNED_HOOK_PHRASES = (
     "나만 알고", "100명 중", "저장 안 하면", "절대 안 함", "이거 모르면 손해", "충격", "실화", "역대급",
+)
+# 영어 계정(lang: en)에 한국어 필수 금지어와 함께 더하는 필수 금지어·금지 훅 문구 (규칙 7과 같은 뜻의 영어 표현).
+# 영어 낱말은 대소문자를 가리지 않고 낱말 단위로 찾는다 (contains_term). "best" 는 막지만 "bestow" 는 막지 않는다.
+REQUIRED_BANNED_WORDS_EN = (
+    "cheapest", "lowest price", "discount", "on sale", "coupon", "best deal", "best", "#1", "number one",
+    "guarantee", "guaranteed", "100% safe", "100% secure", "completely safe", "totally safe", "unhackable",
+    "hack-proof", "can't be hacked", "zero risk", "perfect", "perfectly", "flawless", "life-changing",
+    "game changer", "game-changer", "forever free", "free forever", "limited time", "act now", "hurry",
+    # "I tried" 는 넣지 않는다: 진짜 이야기("I tried several PDF editing sites")까지 막힌다. 지어낸 경험은 검수 R2 가 본다
+    "I've been using",
+)
+REQUIRED_BANNED_HOOK_PHRASES_EN = (
+    "you won't believe", "nobody tells you", "no one talks about", "save this", "you're missing out",
+    "stop scrolling", "shocking", "mind-blowing", "mind blowing", "secret trick",
 )
 # 모델 이름 앞부분 → 제공사. 생성·검수 모델의 회사가 같은지 판단하는 데 쓴다.
 MODEL_PROVIDERS = (
@@ -116,6 +133,21 @@ CONTENTS = ("coupang", "app")
 DISCLOSURE_REQUIRED_PHRASES = ("쿠팡 파트너스 활동의 일환으로", "수수료를 제공받습니다")
 # 앱 홍보 계정의 링크 답글 첫 줄: 내가 만든 앱이라는 사실을 밝힌다 ("내가 만든 앱이야." / "제가 만든 앱이에요.")
 APP_DISCLOSURE_REQUIRED_PHRASES = ("만든 앱",)
+# 영어 계정의 같은 문구 (예: "I built this app.")
+APP_DISCLOSURE_REQUIRED_PHRASES_EN = ("I built",)
+
+
+def contains_term(text: str, term: str, lang: str = "ko") -> bool:
+    """금지어·금지 훅 문구가 글에 있는지. ko 는 예전 그대로 글자가 그대로 들어 있는지만 본다.
+    en 은 대소문자를 가리지 않고, 영문·숫자로 된 낱말은 앞뒤가 영문·숫자가 아닐 때만 찾는다 ("best" ≠ "bestow")."""
+    if lang != "en":
+        return term in text
+    pattern = re.escape(term)
+    if term[:1].isascii() and term[:1].isalnum():
+        pattern = r"(?<![A-Za-z0-9])" + pattern
+    if term[-1:].isascii() and term[-1:].isalnum():
+        pattern += r"(?![A-Za-z0-9])"
+    return re.search(pattern, text, re.IGNORECASE) is not None
 
 log = logging.getLogger("threads_coupas")
 
@@ -377,6 +409,8 @@ class Config:
     allow_media: bool = False
     # 계정이 다루는 것: coupang(쿠팡 파트너스 상품, 기본) 또는 app(내가 만든 앱 홍보, app_posts.py, PLAN 1-2)
     content: str = "coupang"
+    # 글 언어: ko(기본) 또는 en (2026-11-07). en 은 content: app 계정만 된다
+    lang: str = "ko"
 
 
 def provider_of(model: str) -> str:
@@ -470,12 +504,15 @@ def _parse_slots(value, min_gap_hours: float) -> tuple[time, ...]:
     return tuple(slots)
 
 
-def _parse_disclosure(value, content: str = "coupang") -> str:
+def _parse_disclosure(value, content: str = "coupang", lang: str = "ko") -> str:
     if not isinstance(value, str) or not value.strip():
         raise ConfigError("규칙 3: disclosure_text 가 비어 있습니다.")
     if value != value.strip() or "\n" in value:
         raise ConfigError("규칙 3: disclosure_text 는 앞뒤 공백 없는 한 줄이어야 합니다 (본문 첫 줄과 그대로 비교합니다).")
-    required = APP_DISCLOSURE_REQUIRED_PHRASES if content == "app" else DISCLOSURE_REQUIRED_PHRASES
+    if content == "app":
+        required = APP_DISCLOSURE_REQUIRED_PHRASES_EN if lang == "en" else APP_DISCLOSURE_REQUIRED_PHRASES
+    else:
+        required = DISCLOSURE_REQUIRED_PHRASES
     lacking = [p for p in required if p not in value]
     if lacking:
         raise ConfigError("규칙 3: disclosure_text 에 필수 문장이 빠졌습니다: " + ", ".join(lacking))
@@ -519,10 +556,17 @@ def parse_config(raw) -> Config:
     content = raw.get("content", Config.content)
     if content not in CONTENTS:
         raise ConfigError(f"content 는 {', '.join(CONTENTS)} 중 하나여야 합니다: {content!r}")
-    disclosure = _parse_disclosure(raw["disclosure_text"], content)
-    banned = _parse_word_list(raw["banned_words"], "banned_words", REQUIRED_BANNED_WORDS)
-    banned_hooks = _parse_word_list(raw["banned_hook_phrases"], "banned_hook_phrases", REQUIRED_BANNED_HOOK_PHRASES)
-    in_disclosure = [w for w in banned + banned_hooks if w in disclosure]
+    lang = raw.get("lang", Config.lang)
+    if lang not in LANGS:
+        raise ConfigError(f"lang 은 {', '.join(LANGS)} 중 하나여야 합니다: {lang!r}")
+    if lang == "en" and content != "app":
+        raise ConfigError("lang: en 은 content: app 계정만 쓸 수 있습니다 (쿠팡 글은 한국어 전용)")
+    disclosure = _parse_disclosure(raw["disclosure_text"], content, lang)
+    required_words = REQUIRED_BANNED_WORDS + (REQUIRED_BANNED_WORDS_EN if lang == "en" else ())
+    required_hooks = REQUIRED_BANNED_HOOK_PHRASES + (REQUIRED_BANNED_HOOK_PHRASES_EN if lang == "en" else ())
+    banned = _parse_word_list(raw["banned_words"], "banned_words", required_words)
+    banned_hooks = _parse_word_list(raw["banned_hook_phrases"], "banned_hook_phrases", required_hooks)
+    in_disclosure = [w for w in banned + banned_hooks if contains_term(disclosure, w, lang)]
     if in_disclosure:
         raise ConfigError("disclosure_text 에 금지어가 들어 있어 링크 글이 모두 막힙니다: " + ", ".join(in_disclosure))
 
@@ -586,6 +630,7 @@ def parse_config(raw) -> Config:
         ops_advice=ops_advice,
         allow_media=allow_media,
         content=content,
+        lang=lang,
     )
 
 
@@ -608,6 +653,7 @@ def main() -> int:
     print(f"  슬롯(KST): {' '.join(t.strftime('%H:%M') for t in cfg.slots_kst)}")
     print(f"  링크 글 비율 상한 {cfg.max_link_post_ratio:.0%}, 금지어 {len(cfg.banned_words)}개, 금지 훅 문구 {len(cfg.banned_hook_phrases)}개")
     print(f"  생성 {cfg.generator_model} (대체 {cfg.generator_fallback_model or '없음'}) / 검수 {cfg.reviewer_model}")
+    print(f"  글 종류 {cfg.content}, 언어 {cfg.lang}, 말투 {cfg.tone}")
     print(f"DRY_RUN: {'true' if dry_run() else 'false'}")
     print(f"AUTO_PUBLISH_DISABLED: {'true' if auto_publish_disabled() else 'false'}")
     missing = secrets.missing()

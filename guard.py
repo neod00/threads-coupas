@@ -13,6 +13,9 @@ check_post(post, cfg) → 문제 목록 (빈 목록 = 통과). 문제마다 항�
   G7  훅(링크 글 둘째 줄, tip 첫 줄) 30자 이하, calc·compare 훅은 calc_payload 숫자 1개 이상
   G8  금지 훅 문구(banned_hook_phrases)가 본문·답글 어디에도 없음
   G9  이미지·영상은 allow_media 계정의 data/media/ 파일만, JPEG·PNG 8MB·MP4 50MB 이하 20개 이하, 링크는 답글에만 (규칙 2, media.py)
+  G10 영어 계정(lang: en)의 본문·답글에 한글이 없음 (2026-11-07)
+
+영어 계정은 G4·G8 의 금지어를 대소문자 없이 낱말 단위로 찾고(settings.contains_term), G7 훅 한도가 60자다.
 
 column_guard.py 와 다른 점: 0~12 를 무조건 허용하지 않는다. PLAN 규칙 7 은 "입력 데이터와 계산 결과에 있는 값만"이므로
 하루 사용시간·월 사용일수·누진 단계도 calc_payload 에 들어 있어야 허용된다. 사건번호 처리는 뺐다.
@@ -25,9 +28,12 @@ from __future__ import annotations
 import re
 
 import media
-from settings import Config
+from settings import Config, contains_term
 
 HOOK_MAX_CHARS = 30
+# 언어별 훅 한도. 영어는 같은 뜻을 쓰는 데 글자가 두 배쯤 들어서 60자로 둔다 (2026-11-07)
+HOOK_MAX_CHARS_BY_LANG = {"ko": HOOK_MAX_CHARS, "en": 60}
+HANGUL_RE = re.compile(r"[\u1100-\u11ff\u3130-\u318f\uac00-\ud7a3]")
 CALC_POST_TYPES = ("calc", "compare")           # 전기요금 계산 글: 가정 문구 필수 (G6)
 LINK_POST_TYPES = ("calc", "compare", "pick", "bundle")   # 링크가 붙는 글
 # 경험 표현. 사용자가 직접 쓴 경험 메모(calc_payload.product.experience)가 있는 글에서만 허용한다 (2026-10-16)
@@ -198,7 +204,8 @@ def check_post(post: dict, cfg: Config) -> list[str]:
     # G4 금지어 (경험 메모가 있는 글은 경험 표현만 허용)
     has_experience = bool(((payload.get("product") or {}) if isinstance(payload, dict) else {}).get("experience"))
     for name, part in parts.items():
-        found = [w for w in cfg.banned_words if w in part and not (has_experience and w in EXPERIENCE_WORDS)]
+        found = [w for w in cfg.banned_words
+                 if contains_term(part, w, cfg.lang) and not (has_experience and w in EXPERIENCE_WORDS)]
         if found:
             problems.append(f"[G4] {name}에 금지어: {', '.join(found)}")
 
@@ -222,17 +229,25 @@ def check_post(post: dict, cfg: Config) -> list[str]:
     # 2026-10-10: 훅은 궁금증으로 시작해도 되므로 숫자를 강제하지 않는다 (숫자를 쓰면 G3 가 값을 검사한다)
     if not hook:
         problems.append("[G7] 훅 위치(첫 줄)가 비어 있습니다")
-    elif len(hook) > HOOK_MAX_CHARS:
-        problems.append(f"[G7] 훅이 깁니다: {len(hook)}자 (최대 {HOOK_MAX_CHARS}자): \"{hook}\"")
+    elif len(hook) > (hook_max := HOOK_MAX_CHARS_BY_LANG.get(cfg.lang, HOOK_MAX_CHARS)):
+        problems.append(f"[G7] 훅이 깁니다: {len(hook)}자 (최대 {hook_max}자): \"{hook}\"")
 
     # G8 금지 훅 문구
     for name, part in parts.items():
-        found = [p for p in cfg.banned_hook_phrases if p in part]
+        found = [p for p in cfg.banned_hook_phrases if contains_term(part, p, cfg.lang)]
         if found:
             problems.append(f"[G8] {name}에 금지 훅 문구: {', '.join(found)}")
 
     # G9 이미지·영상 (규칙 2, 2026-10-30): 허용된 계정의 자기 폴더 파일만
     problems += media.media_problems(post, cfg)
+
+    # G10 영어 계정에 한글 (생성기가 한국어 피드백을 받아 한국어를 섞어 쓰는 일을 막는다)
+    if cfg.lang == "en":
+        for name, part in parts.items():
+            found = sorted(set(HANGUL_RE.findall(part)))
+            if found:
+                problems.append(f"[G10] 영어 계정인데 {name}에 한글이 있습니다: {''.join(found[:10])} "
+                                "(Write everything in English)")
 
     return problems
 

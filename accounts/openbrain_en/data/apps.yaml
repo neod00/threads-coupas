@@ -1,0 +1,139 @@
+# 홍보할 내 앱 목록 — openbrain_en (영어 계정, 2026-11-07). 형식은 프로젝트 루트 data/apps.yaml 과 같다 (단계 설명도 그쪽에 있다).
+# 글의 사실·숫자는 info 에 적힌 것만 쓴다. 영어판에는 한국어 전용 내용(한글·HWP)을 넣지 않는다 (PdfMonster 영어판과 같은 원칙).
+# 캡처는 영어 화면(/en/)과 data/app_samples/pdfmonster/sample-en.pdf(PdfMonster 가 만든 지어낸 내용의 샘플)로 찍는다.
+
+apps:
+  - id: pdfmonster
+    name: PdfMonster
+    url: https://pdfmonster.xyz/en/
+    info:
+      one_liner: A free editor that fixes the text in a PDF right where it is, inside your browser
+      audience: People who now and then need to fix a contract, form or other PDF
+      problem: Installing software just to fix one word in a PDF, or uploading a document with personal data to a site you have never used
+      how: The PDF engine runs inside your browser, so your file is never uploaded to a server
+      facts:
+        - Free
+        - No signup
+        - No install
+        - Files are processed only inside your browser and are never uploaded to a server
+        - Works in desktop (PC, Mac) and mobile browsers
+        - Opens PDFs up to 60 MB
+        - Edits reuse the original font when it has the characters and match its weight, size and spacing
+      limits:
+        - I am building it solo, so there are still rough edges
+      # 만든 사람의 진짜 이야기 (루트 data/apps.yaml 의 stories 를 뜻 그대로 옮김). 다른 회사·제품 이름은 넣지 않는다 (검수 R10)
+      stories:
+        - I needed to edit a PDF at work, and the popular PDF editing software was paid
+        - I tried several PDF editing sites, but many switched to paid after a few uses or were paid from the start, so I just built my own
+        - I brought over the features I used in paid PDF editors one by one, and I plan to keep updating it
+      link: https://pdfmonster.xyz/en/
+      launch_media: [edit-text-demo, edit-text, search]
+      features:
+        - id: edit-text
+          name: Edit text
+          desc: Tap a line in the PDF and change the text right there. Edits match the original font, weight and spacing
+          media: edit-text
+          clip: edit-text-demo
+        - id: redact
+          name: Find and redact personal data
+          desc: Automatically finds phone numbers, ID numbers, emails, card numbers and account-like numbers and redacts them in one go. Redacted text is actually removed when you save
+          media: search
+          clip: edit-text-demo
+        - id: sign
+          name: Add a signature
+          desc: Draw your signature or type your name to make one and place it on the PDF. Signatures are saved only in your browser
+        - id: merge-split
+          name: Merge and split
+          desc: Combine several PDFs into one, pull out the pages you need, or split a PDF into several files
+        - id: compress
+          name: Compress
+          desc: Shrinks the images inside a PDF to make the file smaller
+        - id: annotate
+          name: Text, shapes and highlighter
+          desc: Add text boxes, shapes such as rectangles and arrows, a pen and a highlighter on top of the PDF
+        - id: stamp
+          name: Watermarks and page numbers
+          desc: Add a watermark such as Confidential or Copy, and add page numbers
+      updates: []
+    shots:
+      - id: home
+        feature: Home — a free PDF editor that never uploads your file
+        steps:
+          - goto: /
+          - wait: 1500
+      - id: editor
+        feature: The editor with a PDF open — edit text, shapes, signature and redact tools
+        steps:
+          - goto: /
+          - upload: {selector: "#fileInput", file: sample-en.pdf}
+          - wait_for: '[aria-label^="Edit line"]'
+          # 두 쪽 이상인 PDF 는 쪽 목록이 열린 채 시작해서 휴대폰 너비에서는 본문을 덮는다. 닫고 찍는다
+          - click: "#btnThumbs"
+          - wait: 1500
+      - id: edit-text
+        feature: Edit text — fix the text in a PDF right where it is
+        steps:
+          - goto: /
+          - upload: {selector: "#fileInput", file: sample-en.pdf}
+          - wait_for: '[aria-label="Edit line: 3. Quoted amount: $1,250.00 (excluding tax)"]'
+          - click: "#btnThumbs"
+          - wait: 400
+          - click: '[aria-label="Edit line: 3. Quoted amount: $1,250.00 (excluding tax)"]'
+          - wait: 800
+          - press: End
+          - press: {key: Backspace, times: 25}
+          - type: "$2,500.00 (excluding tax)"
+          - wait: 1000
+      - id: search
+        feature: Find — search text and automatically find personal data to redact
+        steps:
+          - goto: /
+          - upload: {selector: "#fileInput", file: sample-en.pdf}
+          - wait_for: '[aria-label^="Edit line"]'
+          - click: "#btnThumbs"
+          - wait: 400
+          - click: "#btnSearch"
+          - wait: 1200
+    clips:
+      - id: edit-text-demo
+        feature: Demo of editing text and redacting a name — changing an amount in a notice, then finding and redacting a name
+        end: {title: PdfMonster, sub: Free · No signup · No upload, cta: Link in the replies}
+        setup:
+          - goto: /
+          - upload: {selector: "#fileInput", file: sample-en.pdf}
+          - wait_for: '[aria-label="Edit line: 3. Quoted amount: $1,250.00 (excluding tax)"]'
+          - click: "#btnThumbs"
+          - wait: 500
+        steps:
+          # Scene 1: hook (first frame = preview image)
+          - title: {text: "Fix PDF text\nright where it is", sub: In your browser. No upload.}
+          # Scene 2: edit text
+          - caption: Tap the line you want to fix
+          - zoom: {selector: '[aria-label="Edit line: 3. Quoted amount: $1,250.00 (excluding tax)"]', scale: 1.9}
+          - wait: 900
+          - click: '[aria-label="Edit line: 3. Quoted amount: $1,250.00 (excluding tax)"]'
+          - wait: 300
+          - caption: Change it right there
+          - press: End
+          - press: {key: Backspace, times: 25}
+          - type: "$2,500.00 (excluding tax)"
+          - wait: 600
+          - press: Enter
+          - wait: 300
+          # Scene 3: find and redact a name
+          - unzoom: true
+          - caption: Find names and redact them
+          - wait: 700
+          - click: "#btnSearch"
+          - wait: 400
+          - click: "#searchInput"
+          - type: Alex Kim
+          - click: "#searchRun"
+          - wait: 700
+          - click: "#searchRedactAll"
+          - wait: 500
+          - click: "#searchClose"
+          - wait: 300
+          - zoom: {selector: '[aria-label="Edit line: Vendor Notice"]', scale: 2.2}
+          - caption: Your file never leaves your browser
+          - wait: 1600

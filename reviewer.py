@@ -36,6 +36,8 @@ log = logging.getLogger("threads_coupas")
 
 PROMPT_PATH = PROJECT_ROOT / "prompts" / "reviewer.md"
 APP_PROMPT_PATH = PROJECT_ROOT / "prompts" / "reviewer_app.md"
+# 영어 앱 홍보 계정(lang: en, 2026-11-07)의 검수 기준. 판정 항목(R1~R12)은 한국어판과 같다
+APP_EN_PROMPT_PATH = PROJECT_ROOT / "prompts" / "reviewer_app_en.md"
 PLAN_PATH = PROJECT_ROOT / "PLAN.md"
 ITEM_CODES = tuple(f"R{i}" for i in range(1, 13))
 VERDICTS = ("pass", "fail", "uncertain")
@@ -118,8 +120,11 @@ TONE_RULES = {
 
 
 def prompt_path_for(cfg: Config):
-    """계정 종류에 맞는 검수 프롬프트. 앱 홍보 계정(content: app)은 앱 글 기준(reviewer_app.md, 2026-10-30)."""
-    return APP_PROMPT_PATH if cfg.content == "app" else PROMPT_PATH
+    """계정 종류에 맞는 검수 프롬프트. 앱 홍보 계정(content: app)은 앱 글 기준(reviewer_app.md, 2026-10-30),
+    영어 앱 계정(lang: en)은 reviewer_app_en.md (2026-11-07)."""
+    if cfg.content == "app":
+        return APP_EN_PROMPT_PATH if cfg.lang == "en" else APP_PROMPT_PATH
+    return PROMPT_PATH
 
 
 def system_prompt(cfg: Config, prompt_path=None, plan_path=PLAN_PATH) -> str:

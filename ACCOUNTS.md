@@ -23,6 +23,25 @@
 - 알림(텔레그램) 앞에는 `[sabolkka]` 가 붙는다. 기존 계정 알림은 그대로다.
 - 시작은 `DRY_RUN_SABOLKKA` 를 만들지 않거나 `true` 로 둔다. 실제 발행은 사람이 `false` 로 바꿀 때만.
 
+## openbrain_en (영어 앱 홍보 계정, 2026-11-07 준비, 아직 발행 안 함)
+openbrain 의 영어판. 같은 앱(PdfMonster)을 영어권에 알린다. `config.yaml` 에 `content: app`, `lang: en`.
+- 언어 설정 `lang: en` 이 바꾸는 것: 링크 답글 첫 줄에 "I built" 필수(`disclosure_text: "I built this app."`), 영어 필수 금지어·금지 훅 문구(`settings.REQUIRED_BANNED_WORDS_EN`)를
+  대소문자 없이 낱말 단위로 검사, 훅 60자(가드 G7), 본문·답글에 한글이 있으면 막음(가드 G10), 영어 생성 지시문, 영어 검수 프롬프트(`prompts/reviewer_app_en.md`),
+  영어 시험지(`tests/review_cases_app_en/cases.json`, 2026-11-07 합격 20/20·10/10), 영어 화면 캡처(`en-US`). 기존 계정은 모두 `ko` 라 바뀐 것이 없다.
+- 글감은 `accounts/openbrain_en/data/apps.yaml` (영어 사실·기능, 링크 `https://pdfmonster.xyz/en/`, 한글·HWP 이야기 없음). 캡처는 PdfMonster 영어판과 지어낸 내용의 `sample-en.pdf` 로 찍는다.
+  두 쪽짜리 PDF 는 쪽 목록이 열린 채 시작해 휴대폰 너비에서 본문을 덮으므로 캡처 단계에서 `#btnThumbs` 로 닫는다.
+- 발행: 하루 최대 2개(링크 글 1개 + 개발 일지), 슬롯 `00:40`·`22:40` KST = 미국 동부 오전. 링크 답글은 바로 단다(`reply_delay_hours` 0).
+- 앞으로 앱 데이터 `updates` 를 적을 때는 루트 `data/apps.yaml`(한국어)과 이 계정 파일(영어) 양쪽에 적는다.
+
+### 켜기 전에 사람이 할 일 (순서대로, 자세한 것은 `.claude/skills/threads-new-account/SKILL.md` 2단계·4단계)
+1. 영어용 Instagram·Threads 계정을 새로 만들고 영어 프로필(이름·소개·사진)을 채운다. 인사글 1개는 직접 올린다
+2. Meta 개발자 앱 → Threads 테스터에 새 계정 추가 → 새 계정에서 초대 수락(시크릿 창) → 액세스 토큰 생성 → `.env.openbrain_en` 의 `THREADS_ACCESS_TOKEN=` 에 붙여 넣기
+3. `$env:ACCOUNT="openbrain_en"; python threads_token.py` (사용자 ID·발급일 기록)
+4. Supabase SQL Editor 에서 `accounts/openbrain_en/db/schema.sql` 실행 → Exposed schemas 에 `openbrain_en` 추가 → `.env.openbrain_en` 에 기존 `SUPABASE_URL`·`SUPABASE_SERVICE_ROLE_KEY` 복사
+5. `python tools/set_github_secrets.py openbrain_en --dry-run` 후 실제 등록, 코드 push, Actions dry_run 두 번 (`account=openbrain_en`)
+6. `accounts/openbrain_en/db/{publish,generate,digest}_cron.sql` 실행, `ACCOUNTS_JSON` 에 `openbrain_en` 추가
+7. **마지막에 사용자만:** `gh variable set DRY_RUN_OPENBRAIN_EN --body false --repo neod00/threads-coupas`
+
 ## 계정별 설정 항목 (config.yaml)
 - `tone`: `polite`(기본, 해요체) 또는 `casual`(친근한 반말). 생성 말투는 `accounts/<계정>/prompts/` 의 프롬프트가 정하고, `tone` 은 검수자 R11 기준과 링크 답글 안내문 말투를 고른다.
 - `talk_topics`: 참여형(talk) 글 주제 목록. 비우면 기본 목록(겨울 난방 주제).
