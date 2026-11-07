@@ -1,0 +1,101 @@
+# openbrain_en 설정 — 2026-11-07, 내가 만든 앱을 영어권에 알리는 1인 개발자 계정 (openbrain 의 영어판, ACCOUNTS.md)
+# 값을 바꾼 뒤 `$env:ACCOUNT="openbrain_en"; python settings.py` 로 점검한다.
+# 코드(settings.py)가 PLAN 1장 규칙보다 느슨한 값은 거부한다.
+
+# 계정이 다루는 것: app = 내가 만든 앱 (글감은 이 폴더의 data/apps.yaml, app_posts.py)
+content: app
+# 글 언어: en → 영어 필수 금지어·공개 문구, 훅 60자, 한글 금지(가드 G10), 영어 검수 프롬프트(prompts/reviewer_app_en.md)·시험지
+lang: en
+
+# ── 발행 규칙 (규칙 5, Step 5) ─────────────────────────────
+# 처음에는 작게: 하루 2개 = 링크 글 1개(앱 소개·기능) + 개발 일지(apps.yaml 의 updates 에 적은 것이 있을 때만). 대개 하루 1개다.
+max_posts_per_day: 2
+min_gap_hours: 2              # 코드 최소값 2보다 작으면 로드 실패
+# 반드시 따옴표로 감싼다. 시각은 KST 이고, 미국 아침에 맞췄다 (11월 기준 미국 동부 = KST - 14시간).
+#   "00:40" KST = 미국 동부 10:40, 서부 07:40 (링크 글이 먼저 이 자리를 쓴다)
+#   "22:40" KST = 미국 동부 08:40
+# 자정을 넘는 간격(22:40 → 다음 날 00:40)까지 min_gap_hours 이상이어야 한다.
+slots_kst: ["00:40", "22:40"]
+max_link_post_ratio: 0.5      # 하루 2개 중 링크 글 1개
+
+# ── 모델 (Step 1) ── openbrain 과 같다 ─────────────────────
+generator_model: gemini-3.8-flash
+generator_fallback_model: null           # 검수가 OpenAI 인 동안은 같은 회사라 끔
+reviewer_model: gpt-5.4-mini
+
+# ── 글 제한 (Step 3, 4) ───────────────────────────────────
+limits:
+  max_chars: 500              # 스레드 API 한도
+  max_body_chars: 350         # 훅을 뺀 본문
+  max_urls: 1                 # 본문 URL + 링크 첨부 합계
+
+# ── 링크 답글 첫 줄 (규칙 3) ──────────────────────────────
+# 앱 링크가 있는 답글의 첫 줄은 이 문장과 정확히 같아야 한다. 내가 만든 앱이라는 사실을 밝힌다 ("I built" 필수).
+disclosure_text: "I built this app."
+
+# ── 금지어 (규칙 7, Step 4) ───────────────────────────────
+# settings.REQUIRED_BANNED_WORDS(한국어)·REQUIRED_BANNED_WORDS_EN 은 여기서 빼도 항상 적용된다.
+# 영어 낱말은 대소문자 없이 낱말 단위로 찾는다 ("safe" 는 막고 "unsafe"·"safeguard" 는 막지 않는다).
+banned_words:
+  # 가격·재촉
+  - price
+  - pricing
+  - cheap
+  - sale
+  - promo
+  - "% off"
+  - don't miss
+  - last chance
+  # 사용 경험 표현 (지어낸 경험 방지)
+  - I use it every day
+  - my family
+  # 안전·보안 장담
+  - safe
+  - safer
+  - safest
+  - secure
+  - securely
+  - private forever
+  - no risk
+  - risk-free
+  - hacked
+  - hacking
+  - leak-proof
+  - never leak
+  # 과장
+  - must-have
+  - insane
+  - revolutionary
+  - ultimate
+  - the only
+  - everyone is using
+  - users love
+
+# ── 금지 훅 문구 (Step 3) ──────────────────────────────────
+# settings.REQUIRED_BANNED_HOOK_PHRASES(_EN) 은 여기서 빼도 항상 적용된다.
+banned_hook_phrases:
+  - you need this
+  - this changes everything
+  - wait for it
+  - read this before
+
+# ── 판정 기준 (PLAN 0장) ── 앱 계정의 주간 리포트는 조회수만 본다 ──
+criteria:
+  week2_min_median_views: 300
+  week2_min_coupang_clicks: 30
+  week4_min_commission_won: 30000
+  week4_min_orders: 5
+
+digest_time_kst: "21:00"          # 일일 요약 발송 시각 (운영자용, 한국어)
+
+# 첫 실제 발행일 (YYYY-MM-DD). 사람이 정한다.
+test_start_date: null
+
+# 말투 값은 한국어 계정용 구분(해요체·반말)이라 영어 계정에는 casual 만 둔다. 영어 말투는 prompts/app_base.md 가 정한다.
+tone: casual
+
+# 만들 글 유형. 앱마다 소개(launch)는 한 번, 그 뒤로 기능(feature)이 링크 자리를 채운다. 질문(ask)은 openbrain 처럼 쓰지 않는다.
+post_types: [launch, feature, devlog]
+
+# 게시물 이미지·영상 (규칙 2 예외). 이 폴더 data/media/ 의 영어 화면 캡처·시연 영상만 붙인다 (capture.py, 가드 G9).
+allow_media: true

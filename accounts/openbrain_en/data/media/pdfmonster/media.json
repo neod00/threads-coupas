@@ -1,0 +1,32 @@
+{
+  "home": {
+    "file": "pdfmonster/home.png",
+    "kind": "image",
+    "feature": "Home — a free PDF editor that never uploads your file",
+    "captured_at": "2026-11-07T08:30:48+00:00"
+  },
+  "editor": {
+    "file": "pdfmonster/editor.png",
+    "kind": "image",
+    "feature": "The editor with a PDF open — edit text, shapes, signature and redact tools",
+    "captured_at": "2026-11-07T08:33:08+00:00"
+  },
+  "search": {
+    "file": "pdfmonster/search.png",
+    "kind": "image",
+    "feature": "Find — search text and automatically find personal data to redact",
+    "captured_at": "2026-11-07T08:33:08+00:00"
+  },
+  "edit-text": {
+    "file": "pdfmonster/edit-text.png",
+    "kind": "image",
+    "feature": "Edit text — fix the text in a PDF right where it is",
+    "captured_at": "2026-11-07T08:33:08+00:00"
+  },
+  "edit-text-demo": {
+    "file": "pdfmonster/edit-text-demo.mp4",
+    "kind": "video",
+    "feature": "Demo of editing text and redacting a name — changing an amount in a notice, then finding and redacting a name",
+    "captured_at": "2026-11-07T08:33:08+00:00"
+  }
+}

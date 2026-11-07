@@ -130,6 +130,8 @@ def _read_prompt(name: str) -> str:
 POLITE_REPLY_SPEC = '"링크 답글에 넣을 안내 한 문장, 해요체 (예: 제품은 여기에서 볼 수 있어요.)"'
 APP_REPLY_SPEC = {"polite": '"링크 답글에 넣을 안내 한 문장, 해요체 (예: 여기서 바로 써 볼 수 있어요.)"',
                   "casual": '"링크 답글에 넣을 안내 한 문장, 반말 (예: 여기서 바로 써 볼 수 있어)"'}
+# 영어 계정(lang: en, 2026-11-07)
+APP_REPLY_SPEC_EN = '"one short casual English sentence for the link reply (e.g. You can try it here.)"'
 CASUAL_REPLY_SPEC = '"링크 답글에 넣을 안내 한 문장, 친근한 반말 (예: 제품은 여기서 볼 수 있어.)"'
 
 
@@ -139,13 +141,15 @@ def system_prompt(cfg: Config, post_type: str, variant: str | None) -> str:
         if variant == "link_in_reply" else "null"
     )
     if post_type in APP_TYPES:
+        en = cfg.lang == "en"
         if variant == "link_in_reply":
-            reply_spec = APP_REPLY_SPEC[cfg.tone]
+            reply_spec = APP_REPLY_SPEC_EN if en else APP_REPLY_SPEC[cfg.tone]
         return _read_prompt("app_base.md").format(
             banned_words=", ".join(cfg.banned_words),
             banned_hook_phrases=", ".join(cfg.banned_hook_phrases),
             max_body_chars=cfg.limits.max_body_chars,
-            hook_number_rule="훅에 숫자가 없어도 됩니다. 숫자를 쓰면 앱 데이터에 있는 값만 씁니다.",
+            hook_number_rule=("A hook does not need a number. If you use one, it must come from the app data." if en
+                              else "훅에 숫자가 없어도 됩니다. 숫자를 쓰면 앱 데이터에 있는 값만 씁니다."),
             reply_line_spec=reply_spec,
         )
     number_rule = "훅에 숫자가 없어도 됩니다. 숫자를 쓰면 데이터에 있는 값만 씁니다. kWh·W 로 시작하지 않습니다."
@@ -159,7 +163,9 @@ def system_prompt(cfg: Config, post_type: str, variant: str | None) -> str:
 
 
 def user_message(post_type: str, payload: dict, feedback: list | None = None, previous: dict | None = None,
-                 recent_texts: Sequence[str] = ()) -> str:
+                 recent_texts: Sequence[str] = (), lang: str = "ko") -> str:
+    if lang == "en":
+        return _user_message_en(post_type, payload, feedback, previous, recent_texts)
     label = "앱 데이터" if post_type in APP_TYPES else "계산 데이터"
     msg = _read_prompt(f"tpl_{post_type}.md") + f"\n\n{label}(JSON):\n" + json.dumps(payload, ensure_ascii=False, indent=1)
     if recent_texts:
@@ -176,6 +182,29 @@ def user_message(post_type: str, payload: dict, feedback: list | None = None, pr
         msg += (
             "\n\n위 문제점을 모두 고쳐 훅 후보 3개와 본문을 새로 작성하세요. 이전 초안을 되풀이하지 마세요. "
             f"지적된 숫자·표현은 빼거나 {label}의 값으로 바꿉니다. 반드시 JSON 으로만 답합니다."
+        )
+    return msg
+
+
+def _user_message_en(post_type: str, payload: dict, feedback: list | None, previous: dict | None,
+                     recent_texts: Sequence[str]) -> str:
+    """영어 계정(lang: en)의 사용자 메시지. 한국어 계정과 같은 내용을 영어로 준다. 문제점(가드·검수 사유)은 한국어로 올 수 있다."""
+    msg = _read_prompt(f"tpl_{post_type}.md") + "\n\nApp data (JSON):\n" + json.dumps(payload, ensure_ascii=False, indent=1)
+    if recent_texts:
+        msg += (
+            "\n\nThese are recent posts. Do not repeat their first line, paragraph order or closing line; take a different angle. "
+            "Do not reuse their numbers or phrases (numbers come only from the app data).\n"
+            + "\n".join(f"[Recent post {i}]\n{t}" for i, t in enumerate(recent_texts[:RECENT_TEXTS_FOR_GENERATOR], start=1))
+        )
+    if feedback:
+        msg += ("\n\nProblems with the previous draft (they may be written in Korean; the post itself must stay in English):\n"
+                + "\n".join(f"- {p}" for p in feedback))
+        if previous:
+            msg += "\n\nPrevious draft:\n" + json.dumps(previous, ensure_ascii=False, indent=1)
+        msg += (
+            "\n\nFix every problem above and write 3 new hook candidates and a new body. Do not repeat the previous draft. "
+            "Drop the flagged numbers and phrases or replace them with values from the app data. Write only in English. "
+            "Answer with JSON only."
         )
     return msg
 
@@ -519,7 +548,8 @@ def generate_post(post_type: str, picked: Sequence[Product], tariff: Tariff, cfg
         # 재시도는 같은 글을 되풀이하지 않도록 온도를 올린다 (로옥션 방식)
         temperature = 0.3 if attempt == 1 else 0.7
         try:
-            draft = parse_draft(complete(system, user_message(post_type, payload, feedback, previous, recent_texts), temperature))
+            draft = parse_draft(complete(system, user_message(post_type, payload, feedback, previous, recent_texts, cfg.lang),
+                                         temperature))
             problems = draft_problems(draft, variant)
         except Exception as e:      # 네트워크·API 오류도 이력에 남기고 다음 시도로 넘어간다
             draft, problems = {}, [f"LLM 호출 실패: {e}"]

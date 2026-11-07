@@ -1,0 +1,15 @@
+{
+  "passed": true,
+  "passed_at": "2026-11-07T08:41:29.590368+00:00",
+  "reviewer_model": "gpt-5.4-mini",
+  "prompt_hash": "48bdfea7f0af5e0a339c5b1176c2debad3f14fabbd6c005fcf54e9cfcbe9f476",
+  "cases_hash": "0d043b45de7667b69b95c9389753de9e971f61f59dbf38e34a9c478e5bcfce14",
+  "summary": {
+    "passed": true,
+    "completed": true,
+    "problem_blocked": "20/20",
+    "normal_passed": "10/10",
+    "missed_problems": [],
+    "rejected_normals": []
+  }
+}

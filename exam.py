@@ -32,6 +32,8 @@ log = logging.getLogger("threads_coupas")
 CASES_PATH = PROJECT_ROOT / "tests" / "review_cases" / "cases.json"
 # 앱 홍보 계정(content: app)의 시험지 (2026-10-30). 앱 데이터도 이 파일 안에 따로 둔다
 APP_CASES_PATH = PROJECT_ROOT / "tests" / "review_cases_app" / "cases.json"
+# 영어 앱 계정(lang: en)의 시험지 (2026-11-07)
+APP_EN_CASES_PATH = PROJECT_ROOT / "tests" / "review_cases_app_en" / "cases.json"
 # 계정마다 합격 기록을 따로 둔다 (검수 프롬프트가 계정마다 다를 수 있다). 기존 계정은 예전 위치 그대로.
 STATE_PATH = ACCOUNT_DIR / "state" / "reviewer_exam.json"
 NORMAL_MIN_RATIO = 0.8              # 문제 글은 전부 막아야 하고, 정상 글은 이 비율 이상 통과해야 한다 (10개 중 8개 기준 그대로)
@@ -49,7 +51,9 @@ def cases_hash(path: Path = CASES_PATH) -> str:
 
 
 def cases_path_for(cfg: Config) -> Path:
-    return APP_CASES_PATH if cfg.content == "app" else CASES_PATH
+    if cfg.content == "app":
+        return APP_EN_CASES_PATH if cfg.lang == "en" else APP_CASES_PATH
+    return CASES_PATH
 
 
 def build_app_case(case: dict, data: dict, cfg: Config) -> tuple[dict, list[dict], list[str]]:
