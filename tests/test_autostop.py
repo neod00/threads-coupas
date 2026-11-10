@@ -2,6 +2,8 @@
 자동 정지 테스트 (규칙 10). 8장 "자동 정지 5개 조건" 항목은 발행기(조건 2)·답글 감시(조건 1)·시험지(조건 5)가
 생기는 Step 6·8 에서 발행이 실제로 멈추는지까지 함께 증명한다. 여기서는 상태·알림·해제와 조건 판정을 검증한다.
 """
+from datetime import datetime, timedelta, timezone
+
 import pytest
 
 import autostop
@@ -99,6 +101,72 @@ def test_held_ratio(env, statuses, stopped):
     posts = [{"id": str(i), "status": s} for i, s in enumerate(statuses)]
     autostop.check_held_ratio(store, notifier, posts)
     assert autostop.is_stopped(store) is stopped
+
+
+# PLAN 1-3 (2026-11-11): 하루 생성분이 3개 미만이면 최근 3일 생성분을 합쳐 보고, 그래도 3개 미만이면 알림만
+NOW = datetime(2026, 11, 11, 11, 0, tzinfo=timezone.utc)
+
+
+def _stored(store, i, status, days_ago, text="첫 줄\n본문"):
+    post = {"id": f"old{i}", "status": status, "text": text,
+            "created_at": (NOW - timedelta(days=days_ago)).isoformat()}
+    store.insert_post(post)
+    return post
+
+
+def _today(store, status, text="오늘 글 첫 줄\n본문"):
+    post = {"id": "today", "status": status, "text": text, "created_at": NOW.isoformat()}
+    store.insert_post(post)                                       # 파이프라인은 저장한 뒤 판정한다
+    return [post]
+
+
+def test_single_held_post_only_notifies(env):
+    """2026-11-07 openbrain_en: 1개 생성, 1개 보류 → 100% 로 정지했다. 이제 알림만."""
+    store, notifier = env
+    autostop.check_held_ratio(store, notifier, _today(store, "held", "my pdf editor redacts phone numbers\n..."), now=NOW)
+    assert not autostop.is_stopped(store)
+    assert notifier.sent[-1].startswith("[확인 필요] 보류된 글 1개") and "my pdf editor redacts" in notifier.sent[-1]
+
+
+def test_three_days_of_held_single_posts_stop(env):
+    store, notifier = env
+    _stored(store, 1, "held", 2)
+    _stored(store, 2, "held", 1)
+    autostop.check_held_ratio(store, notifier, _today(store, "held"), now=NOW)
+    assert autostop.is_stopped(store)
+    assert "최근 3일 생성분 중 held 비율 100%" in autostop.status(store)["reasons"][0]["reason"]
+
+
+def test_recent_approved_posts_dilute_a_single_hold(env):
+    store, notifier = env
+    _stored(store, 1, "published", 2)
+    _stored(store, 2, "approved", 1)
+    assert autostop.check_held_ratio(store, notifier, _today(store, "held"), now=NOW) == pytest.approx(1 / 3)
+    assert not autostop.is_stopped(store)
+
+
+def test_posts_older_than_window_and_api_errors_are_not_counted(env):
+    store, notifier = env
+    _stored(store, 1, "held", 4)                                  # 3일 밖
+    store.insert_post(dict(_api_error_post(9, "llm"), created_at=(NOW - timedelta(days=1)).isoformat()))
+    autostop.check_held_ratio(store, notifier, _today(store, "held"), now=NOW)
+    assert not autostop.is_stopped(store)                         # 표본 1개(오늘 글)뿐 → 알림만
+
+
+def test_single_approved_post_sends_nothing(env):
+    store, notifier = env
+    autostop.check_held_ratio(store, notifier, _today(store, "approved"), now=NOW)
+    assert not autostop.is_stopped(store) and notifier.sent == []
+
+
+def test_full_day_ignores_older_posts(env):
+    """그날 3개 이상이면 예전처럼 그날 생성분만 본다 (지난 승인 글로 나쁜 날을 묽히지 않는다)."""
+    store, notifier = env
+    for i in range(6):
+        _stored(store, i, "approved", 1)
+    today = [{"id": f"t{i}", "status": s, "created_at": NOW.isoformat()} for i, s in enumerate(["held", "held", "approved"])]
+    assert autostop.check_held_ratio(store, notifier, today, now=NOW) == pytest.approx(2 / 3)
+    assert autostop.is_stopped(store)
 
 
 def _api_error_post(i, kind):

@@ -8,6 +8,7 @@
   2 발행 실패 2회 연속                         publisher.py (Step 6) → record_publish_result
   3 하루 생성분 중 held 비율 50% 초과            generate 파이프라인 → check_held_ratio
     (API 호출 실패로 생긴 held 는 비율에서 빼고 알림만 보낸다 — 2026-10-01 결정)
+    (하루 생성분이 3개 미만이면 최근 3일 생성분을 합쳐 보고, 그래도 3개 미만이면 알림만 — PLAN 1-3, 2026-11-11)
   4 AI 검수자 응답 3회 연속 형식 오류             generate 파이프라인 → record_review_status
   5 시험지에 케이스 추가 (재시험 합격 전까지)       exam.exam_status 가 케이스 해시 불일치로 불합격 → 발행기(Step 6)가 거부하고 정지
 """
@@ -15,7 +16,7 @@ from __future__ import annotations
 
 import logging
 import re
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 
 log = logging.getLogger("threads_coupas")
 
@@ -25,6 +26,10 @@ PUBLISH_FAIL_KEY = "publish_failures_in_a_row"
 MAX_FORMAT_ERRORS = 3
 MAX_PUBLISH_FAILURES = 2
 MAX_HELD_RATIO = 0.5
+# 하루 1개만 만드는 계정은 보류 1개가 곧 100% 라 정지했다 (2026-11-07 openbrain_en, 2026-10-04 openbrain).
+# 표본이 이보다 적으면 최근 며칠 생성분을 합쳐 보고, 그래도 적으면 정지하지 않고 알림만 보낸다 (PLAN 1-3).
+MIN_HELD_SAMPLE = 3
+HELD_WINDOW_DAYS = 3
 REPLY_STOP_WORDS = ("스팸", "신고", "광고충", "사기", "허위")
 # 일상 표현과 겹치는 단어는 고발하는 문맥일 때만 정지한다 (PLAN 1-3).
 # 2026-11-10 "편의점에서 사기도 수월해서"(구매)의 '사기'로 sabol.kka 가 오탐 정지됐다.
@@ -114,10 +119,12 @@ def is_api_error_hold(post: dict) -> bool:
     return bool(problems) and all(p.startswith("LLM 호출 실패") or "호출 실패" in p for p in problems)
 
 
-def check_held_ratio(store, notifier, generated: list[dict]) -> float:
+def check_held_ratio(store, notifier, generated: list[dict], now: datetime | None = None) -> float:
     """하루 생성분 중 held 비율이 50%를 넘으면 정지 (조건 3). 비율을 돌려준다.
     API 호출 실패로 생긴 held 는 생성기 품질 신호가 아니므로 비율 계산에서 뺀다 (2026-10-01 결정, A안).
-    대신 그런 글이 있으면 정지하지 않고 알림만 보낸다."""
+    대신 그런 글이 있으면 정지하지 않고 알림만 보낸다.
+    판정할 글이 3개 미만이면 최근 3일 안에 생성된 글을 합쳐 본다. 합쳐도 3개 미만이면 정지하지 않고,
+    held 가 있으면 알림만 보낸다 (PLAN 1-3, 2026-11-11). 3개 이상인 날은 그날 생성분만 본다(예전과 같음)."""
     api_errors = [p for p in generated if is_api_error_hold(p)]
     judged = [p for p in generated if p not in api_errors]
     if api_errors:
@@ -128,11 +135,29 @@ def check_held_ratio(store, notifier, generated: list[dict]) -> float:
             log.error(f"[알림] 전송 실패: {e}")
     if not judged:
         return 0.0
-    ratio = sum(p["status"] == "held" for p in judged) / len(judged)
+    sample, scope = judged, "하루 생성분"
+    if len(judged) < MIN_HELD_SAMPLE:
+        now = now or datetime.now(timezone.utc)
+        since = (now - timedelta(days=HELD_WINDOW_DAYS)).astimezone(timezone.utc).isoformat()
+        ids = {p.get("id") for p in generated}
+        recent = [p for p in store.list_posts(since=since) if p.get("id") not in ids and not is_api_error_hold(p)]
+        sample, scope = judged + recent, f"최근 {HELD_WINDOW_DAYS}일 생성분"
+    held = [p for p in sample if p["status"] == "held"]
+    ratio = len(held) / len(sample)
+    if len(sample) < MIN_HELD_SAMPLE:
+        if held:
+            hooks = "\n".join(f"- {(p.get('text') or '').strip().splitlines()[0][:60]}" if (p.get("text") or "").strip()
+                              else f"- (초안 없음) {str(p.get('id'))[:8]}" for p in held)
+            try:
+                notifier.send(f"[확인 필요] 보류된 글 {len(held)}개 ({scope} {len(sample)}개 중). "
+                              f"판정할 글이 {MIN_HELD_SAMPLE}개 미만이라 발행을 멈추지 않았어요.\n{hooks}")
+            except Exception as e:
+                log.error(f"[알림] 전송 실패: {e}")
+        return ratio
     if ratio > MAX_HELD_RATIO:
-        trigger(store, notifier, f"하루 생성분 중 held 비율 {ratio:.0%} (50% 초과, 생성기 이상 신호)",
-                {"generated": len(generated), "api_error_held": len(api_errors),
-                 "held": [p["id"] for p in judged if p["status"] == "held"]})
+        trigger(store, notifier, f"{scope} 중 held 비율 {ratio:.0%} (50% 초과, 생성기 이상 신호)",
+                {"generated": len(generated), "api_error_held": len(api_errors), "sample": len(sample),
+                 "held": [p["id"] for p in held]})
     return ratio
 
 

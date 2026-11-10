@@ -159,7 +159,7 @@ def run_generate(store, cfg: Config, tariff, products, *, complete, review_call,
             break
 
     if save:
-        autostop.check_held_ratio(store, notifier, made)
+        autostop.check_held_ratio(store, notifier, made, now=now)
     return {"action": "generated", "posts": made}
 
 
