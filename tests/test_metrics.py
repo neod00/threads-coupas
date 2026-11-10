@@ -137,6 +137,20 @@ def test_stop_word_reply_stops(make_post):
     assert "광고충" in notifier.sent[-1]
 
 
+def test_everyday_stop_word_reply_only_notifies(make_post):
+    """2026-11-10 오탐: '편의점에서 사기도 수월해서'의 '사기'(구매)로 정지됐다. 이제 알림만 보내고 발행은 계속한다 (PLAN 1-3)."""
+    store, notifier = MemoryStore(), CollectingNotifier()
+    published(make_post, store, 5, "m-1")
+    text = "난 풀무원돌얼음이제일단단하고 편의점에서사기도수월해서그냥사먹어"
+    api = FakeThreads(replies={"m-1": [{"id": "r1", "text": text, "username": "back0625",
+                                        "permalink": "https://www.threads.com/@back0625/post/x"}]})
+    result = watch_replies.watch(store, api, notifier, NOW)
+    assert not result["stopped"] and not autostop.is_stopped(store) and result["new_replies"] == 1
+    assert notifier.sent[-1].startswith("[확인 필요]") and "@back0625" in notifier.sent[-1]
+    assert "https://www.threads.com/@back0625/post/x" in notifier.sent[-1]
+    assert store.get_state(watch_replies.INBOX_KEY)[-1]["reply_id"] == "r1"     # 답해 줄 답글 목록에는 그대로 남는다
+
+
 def test_own_and_old_replies_ignored(make_post):
     store, notifier = MemoryStore(), CollectingNotifier()
     published(make_post, store, 5, "m-new")

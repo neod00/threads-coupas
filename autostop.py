@@ -3,7 +3,8 @@
 해제는 사람이 사유를 입력해야만 가능하고, 해제 기록은 events 에 남는다.
 
 조건                                        판정 위치
-  1 내 게시물 답글에 스팸·신고·광고충·사기·허위    watch_replies.py (Step 8)
+  1 내 게시물 답글에 스팸·신고·광고충·사기·허위    watch_replies.py (Step 8) → check_reply_text
+    (스팸·신고·사기는 고발하는 문맥일 때만 정지, 아니면 알림만 — PLAN 1-3, 2026-11-11 결정)
   2 발행 실패 2회 연속                         publisher.py (Step 6) → record_publish_result
   3 하루 생성분 중 held 비율 50% 초과            generate 파이프라인 → check_held_ratio
     (API 호출 실패로 생긴 held 는 비율에서 빼고 알림만 보낸다 — 2026-10-01 결정)
@@ -13,6 +14,7 @@
 from __future__ import annotations
 
 import logging
+import re
 from datetime import datetime, timezone
 
 log = logging.getLogger("threads_coupas")
@@ -24,6 +26,16 @@ MAX_FORMAT_ERRORS = 3
 MAX_PUBLISH_FAILURES = 2
 MAX_HELD_RATIO = 0.5
 REPLY_STOP_WORDS = ("스팸", "신고", "광고충", "사기", "허위")
+# 일상 표현과 겹치는 단어는 고발하는 문맥일 때만 정지한다 (PLAN 1-3).
+# 2026-11-10 "편의점에서 사기도 수월해서"(구매)의 '사기'로 sabol.kka 가 오탐 정지됐다.
+# 그 밖의 쓰임("사기 전에", "슬리퍼 신고", "스팸 구워")은 정지하지 않고 답글을 담아 알림만 보낸다.
+REPLY_ACCUSATION_PATTERNS = {
+    "사기": re.compile(r"사기(꾼|성|네|야|임|다|잖|래|라고)|사기\s?(치|쳤|친|칠|당|같|아니|아닌|계정|광고|업체|판매|글(?!쎄))"),
+    "신고": re.compile(r"신고(합니|할게|할께|할래|할거|하겠|했어요|했습|했다|했음|함|하세|해요|해라|해야|해버|감|각)"
+                       r"|신고\s?(먹|버튼|완료|누르|넣)"),
+    "스팸": re.compile(r"스팸(이네|이야|임|이다|봇|성)|스팸\s?(계정|광고|댓글|글(?!쎄)|아니|아닌|같아|같네|같은\s?(계정|글|광고|댓글))"),
+}
+REPLY_EXCERPT_CHARS = 120
 
 
 def status(store) -> dict:
@@ -34,8 +46,8 @@ def is_stopped(store) -> bool:
     return bool(status(store).get("active"))
 
 
-def trigger(store, notifier, reason: str, detail: dict | None = None) -> None:
-    """정지를 켜고 알림을 보낸다. 이미 정지 중이면 사유만 더한다."""
+def trigger(store, notifier, reason: str, detail: dict | None = None, note: str = "") -> None:
+    """정지를 켜고 알림을 보낸다. 이미 정지 중이면 사유만 더한다. note 는 알림에만 붙는 설명(예: 답글 원문)."""
     state = status(store)
     now = datetime.now(timezone.utc).isoformat()
     first = not state.get("active")
@@ -48,8 +60,8 @@ def trigger(store, notifier, reason: str, detail: dict | None = None) -> None:
     store.log_event("auto_stop", {"reason": reason, "detail": detail or {}})
     log.error(f"[자동 정지] {reason}")
     try:
-        notifier.send(f"[자동 정지] 발행을 멈췄습니다.\n사유: {reason}\n"
-                      "해제: 모니터링 화면에서 사유를 입력하고 해제하세요.")
+        notifier.send(f"[자동 정지] 발행을 멈췄습니다.\n사유: {reason}\n" + (f"{note}\n" if note else "")
+                      + "해제: 모니터링 화면에서 사유를 입력하고 해제하세요.")
     except Exception as e:      # 알림이 실패해도 정지 상태는 유지한다
         log.error(f"[자동 정지] 알림 전송 실패: {e}")
 
@@ -124,9 +136,38 @@ def check_held_ratio(store, notifier, generated: list[dict]) -> float:
     return ratio
 
 
+def reply_stop_words(reply_text: str) -> tuple[list[str], list[str]]:
+    """답글에 든 정지 단어를 (정지할 단어, 알림만 보낼 단어) 로 나눈다 (PLAN 1-3).
+    광고충·허위는 들어 있기만 해도 정지, 스팸·신고·사기는 고발하는 문맥일 때만 정지."""
+    text = reply_text or ""
+    stop, notify_only = [], []
+    for w in REPLY_STOP_WORDS:
+        if w not in text:
+            continue
+        pattern = REPLY_ACCUSATION_PATTERNS.get(w)
+        (stop if pattern is None or pattern.search(text) else notify_only).append(w)
+    return stop, notify_only
+
+
+def _reply_note(reply_text: str, detail: dict | None) -> str:
+    excerpt = " ".join((reply_text or "").split())[:REPLY_EXCERPT_CHARS]
+    who = (detail or {}).get("username")
+    link = (detail or {}).get("permalink")
+    return f"답글{f' (@{who})' if who else ''}: {excerpt}" + (f"\n{link}" if link else "")
+
+
 def check_reply_text(store, notifier, reply_text: str, detail: dict | None = None) -> bool:
-    """내 게시물에 달린 답글 한 개를 검사. 정지 단어가 있으면 정지 (조건 1). watch_replies.py 가 부른다."""
-    hits = [w for w in REPLY_STOP_WORDS if w in (reply_text or "")]
-    if hits:
-        trigger(store, notifier, f"내 게시물 답글에 '{', '.join(hits)}' 포함", detail)
-    return bool(hits)
+    """내 게시물에 달린 답글 한 개를 검사. 고발하는 정지 단어가 있으면 정지 (조건 1). watch_replies.py 가 부른다.
+    정지 단어가 일상 표현으로만 쓰였으면 정지하지 않고 사람이 확인하도록 알림만 보낸다."""
+    stop, notify_only = reply_stop_words(reply_text)
+    note = _reply_note(reply_text, detail)
+    if stop:
+        trigger(store, notifier, f"내 게시물 답글에 '{', '.join(stop)}' 포함", detail, note=note)
+    elif notify_only:
+        log.warning(f"[답글 감시] '{', '.join(notify_only)}' 단어가 있지만 고발 문맥이 아니라 정지하지 않음")
+        try:
+            notifier.send(f"[확인 필요] 답글에 '{', '.join(notify_only)}' 단어가 있지만 고발하는 문맥이 아니라 "
+                          f"발행을 멈추지 않았어요.\n{note}\n악성 답글이면 킬 스위치를 켜 주세요.")
+        except Exception as e:
+            log.error(f"[알림] 전송 실패: {e}")
+    return bool(stop)

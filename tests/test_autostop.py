@@ -144,3 +144,49 @@ def test_reply_keywords(env, text, stopped):
     store, notifier = env
     assert autostop.check_reply_text(store, notifier, text) is stopped
     assert autostop.is_stopped(store) is stopped
+
+
+# PLAN 1-3 (2026-11-11): 스팸·신고·사기는 고발하는 문맥일 때만 정지
+ACCUSATIONS = [
+    "이거 사기네", "완전 사기야", "사기꾼 계정", "사기 치지 마", "사기 아닌가요", "사기당했어요", "사기성 광고 같아",
+    "신고합니다", "신고할게요", "신고했어요", "신고 먹였다", "신고감이네",
+    "스팸 계정이네", "스팸이네", "스팸 광고 그만", "스팸 같아요", "스팸 댓글 지워",
+]
+EVERYDAY = [
+    "난 풀무원돌얼음이제일단단하고 편의점에서사기도수월해서그냥사먹어",   # 2026-11-10 실제 오탐 답글
+    "사기 전에 리뷰 많이 봐", "이 가격이면 사기엔 좀 비싸", "나는 사기 싫더라", "사기 글쎄 고민돼",
+    "슬리퍼 신고 다녀", "양말 신고 자면 따뜻해",
+    "스팸 구워 먹을 때 좋아", "스팸 김밥 해먹어",
+]
+
+
+@pytest.mark.parametrize("text", ACCUSATIONS)
+def test_accusing_reply_stops_with_reply_text_in_alert(env, text):
+    store, notifier = env
+    detail = {"username": "someone", "permalink": "https://www.threads.com/@someone/post/x"}
+    assert autostop.check_reply_text(store, notifier, text, detail)
+    assert autostop.is_stopped(store)
+    assert "[자동 정지]" in notifier.sent[-1] and text[:10] in notifier.sent[-1]
+    assert "@someone" in notifier.sent[-1] and detail["permalink"] in notifier.sent[-1]
+
+
+@pytest.mark.parametrize("text", EVERYDAY)
+def test_everyday_use_only_notifies(env, text):
+    store, notifier = env
+    assert not autostop.check_reply_text(store, notifier, text, {"permalink": "https://t/p"})
+    assert not autostop.is_stopped(store)
+    assert len(notifier.sent) == 1 and notifier.sent[0].startswith("[확인 필요]")
+    assert "https://t/p" in notifier.sent[0]
+
+
+def test_always_stop_words_need_no_context(env):
+    store, notifier = env
+    assert autostop.reply_stop_words("광고충") == (["광고충"], [])
+    assert autostop.reply_stop_words("허위") == (["허위"], [])
+    assert autostop.reply_stop_words("사기 전에 허위 아님") == (["허위"], ["사기"])   # 하나라도 정지면 정지
+
+
+def test_reply_without_stop_words_sends_nothing(env):
+    store, notifier = env
+    assert not autostop.check_reply_text(store, notifier, "전기요 계산 도움 됐어요")
+    assert notifier.sent == []
