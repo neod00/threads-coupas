@@ -25,8 +25,8 @@ CASES = DATA["cases"]
 
 def test_case_counts():
     expects = Counter(c["expect"] for c in CASES)
-    assert expects == {"block": 28, "pass": 17}         # 2026-11-14 선물지니(gift) N16·N17·P26~P28 추가
-    assert len({c["id"] for c in CASES}) == 45
+    assert expects == {"block": 29, "pass": 17}         # 2026-11-14 선물지니(gift) N16·N17·P26~P29 추가
+    assert len({c["id"] for c in CASES}) == 46
 
 
 def test_problem_cases_cover_required_items():
@@ -77,7 +77,7 @@ def ideal_reviewer(cfg, overrides=None):
 def test_perfect_reviewer_passes(cfg):
     summary = exam.run_exam(ideal_reviewer(cfg), cfg, DATA)
     assert summary["passed"] is True
-    assert (summary["problem_blocked"], summary["normal_passed"]) == ("28/28", "17/17")
+    assert (summary["problem_blocked"], summary["normal_passed"]) == ("29/29", "17/17")
 
 
 def test_one_missed_problem_fails_the_exam(cfg):

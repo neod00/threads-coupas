@@ -46,6 +46,7 @@ class GiftApp:
     one_liner: str
     facts: tuple[str, ...]
     occasions: tuple[Occasion, ...]
+    reasons: tuple[str, ...] = ()       # 만든 이유 (사람이 확인한 문장). 글의 계기·동기는 이 안에서만
 
     @property
     def host(self) -> str:
@@ -72,6 +73,9 @@ def parse_gift_app(raw: dict) -> GiftApp:
     facts = tuple(str(f).strip() for f in app.get("facts") or [] if str(f).strip())
     if not facts or any(len(f) > MAX_FACT_CHARS for f in facts):
         raise ConfigError(f"gift_app.yaml 의 app.facts 는 {MAX_FACT_CHARS}자 이하 문장이 하나 이상 있어야 합니다")
+    reasons = tuple(str(r).strip() for r in app.get("reasons") or [] if str(r).strip())
+    if any(len(r) > MAX_FACT_CHARS for r in reasons):
+        raise ConfigError(f"gift_app.yaml 의 app.reasons 는 {MAX_FACT_CHARS}자 이하 문장이어야 합니다")
     occasions = []
     for i, item in enumerate((raw or {}).get("occasions") or [], start=1):
         theme = str((item or {}).get("theme") or "").strip()
@@ -87,7 +91,7 @@ def parse_gift_app(raw: dict) -> GiftApp:
         raise ConfigError("gift_app.yaml occasions 에 season 이 없는(언제나 쓰는) 주제가 하나 이상 있어야 합니다")
     if len({o.theme for o in occasions}) != len(occasions):
         raise ConfigError("gift_app.yaml occasions 의 theme 이 겹칩니다")
-    return GiftApp(name, url, one_liner, facts, tuple(occasions))
+    return GiftApp(name, url, one_liner, facts, tuple(occasions), reasons)
 
 
 def load_gift_app(path: Path | None = None) -> GiftApp:
@@ -109,7 +113,7 @@ def themes_for(app: GiftApp, day: date | None) -> list[str]:
 def build_payload(app: GiftApp, theme: str) -> dict:
     """생성기·가드·검수자가 함께 보는 calc_payload. 글의 사실은 app.facts 에 있는 것만 쓴다."""
     return {"app": {"name": app.name, "one_liner": app.one_liner, "facts": list(app.facts),
-                    "maker": "이 계정 주인이 직접 만든 앱"},
+                    "maker": "이 계정 주인이 직접 만든 앱", "reasons": list(app.reasons)},
             "occasion": theme}
 
 
