@@ -92,12 +92,15 @@ def render_cron(kind: str, name: str, root: Path = PROJECT_ROOT) -> str:
     call_end = "\n  );\n  $job$"
     if text.count(call_end) != 1:
         raise ValueError("db/generate_cron.sql 의 예약 본문 형식이 바뀌었습니다")
-    return text.replace(call_end, "\n" + publish_gate(name, _template_reply_delay()) + "\n  $job$")
+    return text.replace(call_end, "\n" + publish_gate(name, _reply_delay(name, root)) + "\n  $job$")
 
 
-def _template_reply_delay() -> float:
+def _reply_delay(name: str, root: Path = PROJECT_ROOT) -> float:
+    """계정 config 가 있으면 그 값(2026-11-14: sabolkka 3 → 1시간), 없으면 템플릿 값."""
     import yaml
-    return float(yaml.safe_load(_read(TEMPLATES / "config.yaml")).get("reply_delay_hours") or 0)
+    own = root / "accounts" / name / "config.yaml"
+    raw = yaml.safe_load(_read(own if own.exists() else TEMPLATES / "config.yaml"))
+    return float(raw.get("reply_delay_hours") or 0)
 
 
 def publish_gate(schema: str, reply_delay_hours: float) -> str:

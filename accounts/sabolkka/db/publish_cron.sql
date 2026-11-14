@@ -37,7 +37,7 @@ select cron.schedule(
                  where status = 'published' and variant = 'link_in_reply'
                    and threads_media_id is not null and threads_reply_id is null
                    and published_at > now() - interval '1 day'   -- 하루 넘게 못 단 답글로는 깨우지 않는다 (계속 실패하면 무료 시간만 씀)
-                   and published_at <= now() - interval '2 hours 45 minutes'   -- reply_delay_hours 3시간 - 15분 여유 (publisher.REPLY_DUE_GRACE)
+                   and published_at <= now() - interval '0 hours 45 minutes'   -- reply_delay_hours 1시간 - 15분 여유 (publisher.REPLY_DUE_GRACE)
                  )
     )
     and not coalesce((select (value->>'active')::boolean from sabolkka.system_state where key = 'auto_stop'), false);
