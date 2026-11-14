@@ -39,7 +39,7 @@ from settings import Config, account_path
 
 log = logging.getLogger("threads_coupas")
 
-POST_TYPES = ("calc", "compare", "pick", "bundle", "talk", "tip")   # pick 2026-10-10, bundle·talk 2026-10-16
+POST_TYPES = ("calc", "compare", "pick", "bundle", "talk", "tip", "gift")   # pick 10-10, bundle·talk 10-16, gift 11-14 (gift_app.py)
 # 앱 홍보 계정 (2026-10-30, app_posts.py): 글감(payload)·링크·이미지는 app_posts 가 만들어 generate_post 에 넘긴다
 APP_TYPES = ("launch", "feature", "devlog", "ask")
 NO_LINK_TYPES = ("tip", "talk", "devlog", "ask")    # 링크·대가성 문구가 없는 글
@@ -266,6 +266,8 @@ def subject_key(post: dict) -> str | None:
             return f"talk|{payload['talk_topic']}"
         if post.get("type") == "bundle":
             return f"bundle|{payload['bundle_id']}"
+        if post.get("type") == "gift":
+            return f"gift|{payload['occasion']}"
         if post.get("type") == "pick":
             return f"pick|{ids}" if ids else None
         if post.get("type") == "calc":
@@ -278,7 +280,7 @@ def subject_key(post: dict) -> str | None:
 
 
 def subjects(products: Sequence[Product], post_type: str, bundles: Sequence = (), day: date | None = None,
-             talk_topics: Sequence[str] = ()) -> list[dict]:
+             talk_topics: Sequence[str] = (), gift=None) -> list[dict]:
     """고를 수 있는 모든 주제: {key, picked, hours, tip_topic, bundle}. bundle 은 day 에 시즌인 테마만."""
     everything = sorted(products, key=lambda p: p.product_id)
     ordered = [p for p in everything if p.has_power]        # 전기요금 계산은 소비전력이 있는 상품만
@@ -292,6 +294,11 @@ def subjects(products: Sequence[Product], post_type: str, bundles: Sequence = ()
     if post_type == "pick":
         return [{"key": f"pick|{p.product_id}", "picked": [p], "hours": None, "tip_topic": None}
                 for p in everything if not p.has_power]
+    if post_type == "gift":
+        # 선물지니 글 (2026-11-14): 시즌 중인 기념일 주제 + 상시 주제 (tip_topic 자리에 주제가 온다)
+        import gift_app
+        return [{"key": f"gift|{t}", "picked": [], "hours": None, "tip_topic": t}
+                for t in (gift_app.themes_for(gift, day) if gift is not None else [])]
     if post_type == "calc":
         return [{"key": f"calc|{p.product_id}|{_hours_key(h)}", "picked": [p], "hours": h, "tip_topic": None}
                 for p in ordered for h in hour_options(p.default_hours)]
@@ -309,10 +316,10 @@ def subjects(products: Sequence[Product], post_type: str, bundles: Sequence = ()
 
 
 def pick_subject(products: Sequence[Product], post_type: str, day: date, used: Sequence[dict] = (),
-                 offset: int = 0, bundles: Sequence = (), talk_topics: Sequence[str] = ()) -> dict:
+                 offset: int = 0, bundles: Sequence = (), talk_topics: Sequence[str] = (), gift=None) -> dict:
     """가장 오래 안 쓴 주제를 고른다. used: 실제로 쓰인(approved·published) posts 행, 오래된 것 → 최신 순.
     한 번도 안 쓴 주제가 먼저고, 그 안에서는 최근에 다룬 상품을 뒤로 미룬다. 동률이면 날짜로 돌린다."""
-    candidates = subjects(products, post_type, bundles, day, talk_topics)
+    candidates = subjects(products, post_type, bundles, day, talk_topics, gift)
     if not candidates:
         raise ValueError(f"{post_type} 에 쓸 주제가 없습니다.")
     last_key, last_product = {}, {}
@@ -353,8 +360,12 @@ def hook_style_order(history: Iterable[dict], now: datetime) -> list[str]:
 
 
 def build_payload(post_type: str, picked: Sequence[Product], tariff: Tariff, tip_topic: str | None = None,
-                  day: date | None = None, hours=None, bundle=None) -> dict:
+                  day: date | None = None, hours=None, bundle=None, gift=None) -> dict:
     """LLM·가드·검수자가 함께 보는 calc_payload. 게시물의 모든 숫자는 여기에 있어야 한다."""
+    if post_type == "gift":
+        # 선물지니 글: 앱의 사실(facts)과 기념일 주제 (gift_app.py)
+        import gift_app
+        return gift_app.build_payload(gift, tip_topic or gift.occasions[0].theme)
     if post_type == "talk":
         # 참여형: 상품·숫자 없이 질문 하나 (tip_topic 자리에 주제가 온다)
         # 선택지 번호 1·2·3 만 숫자로 쓸 수 있다 (가드 G3)
@@ -484,7 +495,12 @@ def assemble(post_type: str, variant: str | None, draft: dict, hook: dict, cfg: 
     fields.update(has_link=True, link_url=link, variant=variant)
     if variant == "link_in_reply":
         # 2026-10-10 결정: 본문에는 대가성 문구·링크를 넣지 않고, 첫 답글에 문구(첫 줄)와 링크를 둔다
-        fields["reply_text"] = f"{cfg.disclosure_text}\n\n{_clean(draft.get('reply_line'))}".strip()
+        head = cfg.disclosure_text
+        if post_type == "gift":
+            # 선물지니 글 (2026-11-14): 둘째 줄에 내가 만든 앱이라는 사실을 코드가 붙인다 (가드 G2)
+            import gift_app
+            head = f"{cfg.disclosure_text}\n{gift_app.OWNER_LINE}"
+        fields["reply_text"] = f"{head}\n\n{_clean(draft.get('reply_line'))}".strip()
     else:
         # 예전 형식 (더 이상 생성하지 않음): 본문에 링크가 있으면 본문 첫 줄이 대가성 문구
         fields["text"] = f"{cfg.disclosure_text}\n{hook['text']}\n\n{body}"
@@ -511,7 +527,7 @@ def generate_post(post_type: str, picked: Sequence[Product], tariff: Tariff, cfg
                   checks: Sequence[CheckFn] = (), history: Iterable[dict] = (),
                   max_attempts: int = MAX_ATTEMPTS, now: datetime | None = None,
                   hours=None, recent_texts: Sequence[str] = (), bundle=None,
-                  app_subject: dict | None = None) -> dict:
+                  app_subject: dict | None = None, gift=None) -> dict:
     """posts 행 하나(dict)를 돌려준다. status 는 approved(가드+검수 통과), draft(가드만 통과, 검수 없음) 또는 held.
     코드 가드(guard.check_post)는 항상 먼저 실행된다 (빼거나 끌 수 없음).
     checks: 가드 다음에 실행할 검사 함수들 (Step 4-B 검수자). history: 훅 선택용 최근 posts 행.
@@ -523,6 +539,8 @@ def generate_post(post_type: str, picked: Sequence[Product], tariff: Tariff, cfg
         raise ValueError(f"알 수 없는 variant: {variant}")
     if post_type == "bundle" and bundle is None:
         raise ValueError("bundle 글은 테마(bundle)가 필요합니다")
+    if (post_type == "gift") != (gift is not None):
+        raise ValueError("gift 글만 선물지니 정보(gift)를 받고, 반드시 받아야 합니다")
     if (post_type in APP_TYPES) != (app_subject is not None):
         raise ValueError("앱 글(launch·feature·devlog·ask)만 app_subject 를 받고, 반드시 받아야 합니다")
     now = now or datetime.now(timezone.utc)
@@ -530,7 +548,8 @@ def generate_post(post_type: str, picked: Sequence[Product], tariff: Tariff, cfg
     if post_type in APP_TYPES:
         link = None if post_type in NO_LINK_TYPES else app_subject["link"]
     else:
-        link = None if post_type in NO_LINK_TYPES else (bundle.link if post_type == "bundle" else picked[0].link)
+        link = (None if post_type in NO_LINK_TYPES else bundle.link if post_type == "bundle"
+                else gift.url if post_type == "gift" else picked[0].link)
     style_order = hook_style_order(history, now)
 
     # 앱 글은 붙일 이미지·영상(media)도 가드 G9 를 거친다
@@ -538,7 +557,8 @@ def generate_post(post_type: str, picked: Sequence[Product], tariff: Tariff, cfg
     if app_subject is not None:
         payload = app_subject["payload"]
     else:
-        payload = build_payload(post_type, picked, tariff, tip_topic, day=now.date(), hours=hours, bundle=bundle)
+        payload = build_payload(post_type, picked, tariff, tip_topic, day=now.date(), hours=hours, bundle=bundle,
+                                gift=gift)
     system = system_prompt(cfg, post_type, variant)
     attempts, feedback, previous = [], None, None
     fields, candidates, passed, final = None, [], False, False
@@ -592,7 +612,7 @@ def generate_post(post_type: str, picked: Sequence[Product], tariff: Tariff, cfg
     if app_subject is not None:
         product_ids = [app_subject["app_id"]]      # 앱 글은 어느 앱의 글인지 남긴다 (launch 는 앱마다 한 번)
     else:
-        product_ids = [p.product_id for p in picked] if post_type not in NO_LINK_TYPES + ("bundle",) else []
+        product_ids = [p.product_id for p in picked] if post_type not in NO_LINK_TYPES + ("bundle", "gift") else []
     return {
         "id": str(uuid.uuid4()),
         "type": post_type,

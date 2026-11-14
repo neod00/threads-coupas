@@ -45,7 +45,7 @@ def llm_failed(post: dict) -> bool:
 
 
 def plan_day(posts, cfg: Config, day, has_compare_pairs: bool, has_picks: bool = False, has_calc: bool = True,
-             has_bundle: bool = False) -> list[str]:
+             has_bundle: bool = False, has_gift: bool = False) -> list[str]:
     """그날 새로 만들 글 유형 목록. 빈 슬롯 수만큼, 링크 글은 링크 한도까지만."""
     occupied = [(t, link) for t, link in rules.occupied(posts) if rules.kst_date(t) == day]
     free = max(0, min(cfg.max_posts_per_day, len(cfg.slots_kst)) - len(occupied))
@@ -69,6 +69,13 @@ def plan_day(posts, cfg: Config, day, has_compare_pairs: bool, has_picks: bool =
     # 2026-10-16: 시즌 모음(bundle)을 낼 수 있는 날은 링크 글 첫 자리를 모음으로 바꾼다
     if links and has_bundle and "bundle" in allowed:
         links[0] = "bundle"
+    # 2026-11-14: 선물지니 글은 수·토요일에 링크 글 한 자리를 쓴다 (모음 글이 있으면 그다음 자리)
+    if has_gift and "gift" in allowed:
+        import gift_app
+        if gift_app.is_gift_day(day):
+            spot = next((i for i, t in enumerate(links) if t != "bundle"), None)
+            if spot is not None:
+                links[spot] = "gift"
     # 링크 없는 자리: 참여형(talk)·팁(tip) 중 켜진 것으로 채운다. 둘 다 꺼져 있으면 비워 둔다
     no_link = [t for t in ("talk", "tip") if t in allowed]
     return links + [no_link[i % len(no_link)] for i in range(free - n_links)] if no_link else links
@@ -92,8 +99,9 @@ def bundle_available(bundles, used, day, now: datetime) -> bool:
 
 def run_generate(store, cfg: Config, tariff, products, *, complete, review_call, notifier, now: datetime,
                  env=None, variant: str = "link_in_reply", save: bool = True, bundles=None,
-                 sleep=time.sleep, clock=time.monotonic, apps=None) -> dict:
-    """apps: content: app 계정의 앱 목록 (app_posts.load_apps). 없으면 apps.yaml 에서 읽는다."""
+                 sleep=time.sleep, clock=time.monotonic, apps=None, gift=None) -> dict:
+    """apps: content: app 계정의 앱 목록 (app_posts.load_apps). 없으면 apps.yaml 에서 읽는다.
+    gift: 선물지니 정보 (gift_app.load_gift_app). post_types 에 gift 가 있고 없으면 계정 폴더의 gift_app.yaml 에서 읽는다."""
     from settings import auto_publish_disabled
 
     if auto_publish_disabled(env):
@@ -117,9 +125,12 @@ def run_generate(store, cfg: Config, tariff, products, *, complete, review_call,
         if bundles is None:
             from bundles import load_bundles
             bundles = load_bundles()
+        if gift is None and "gift" in cfg.post_types:
+            import gift_app
+            gift = gift_app.load_gift_app()
         types = plan_day(occupying, cfg, tomorrow, _has_compare_pairs(products),
                          has_picks=any(not p.has_power for p in products), has_calc=any(p.has_power for p in products),
-                         has_bundle=bundle_available(bundles, used, tomorrow, now))
+                         has_bundle=bundle_available(bundles, used, tomorrow, now), has_gift=gift is not None)
     if not types:
         return {"action": "no_free_slot", "posts": []}
 
@@ -142,7 +153,8 @@ def run_generate(store, cfg: Config, tariff, products, *, complete, review_call,
         for post_type in queue:
             post = _generate_one(post_type, offset, products=products, tariff=tariff, cfg=cfg, complete=complete,
                                  variant=variant, used=used, history=history, made=made, rev=rev, bundles=bundles,
-                                 tomorrow=tomorrow, day_start=day_start, occupying=occupying, now=now, apps=apps)
+                                 tomorrow=tomorrow, day_start=day_start, occupying=occupying, now=now, apps=apps,
+                                 gift=gift)
             offset += 1
             if post is None:        # 앱 글: 고를 주제가 없다 (예: 소개 글이 보류돼 기능 글을 아직 쓸 수 없음)
                 log.info(f"[생성] {post_type} → 고를 주제가 없어 건너뜀")
@@ -164,7 +176,7 @@ def run_generate(store, cfg: Config, tariff, products, *, complete, review_call,
 
 
 def _generate_one(post_type, i, *, products, tariff, cfg, complete, variant, used, history, made, rev, bundles,
-                  tomorrow, day_start, occupying, now, apps=None) -> dict | None:
+                  tomorrow, day_start, occupying, now, apps=None, gift=None) -> dict | None:
     """글 1개 생성 → 가드·검수 → approved 면 다음 날 빈 슬롯 배정. 앱 글에 고를 주제가 없으면 None."""
     newest_first = [p["text"] for p in reversed(used)]
     same_type = [p["text"] for p in reversed(used) if p["type"] == post_type]
@@ -184,19 +196,23 @@ def _generate_one(post_type, i, *, products, tariff, cfg, complete, variant, use
         return _schedule(post, used, cfg, occupying, made, day_start, tomorrow)
     # 가장 오래 안 쓴 (상품 × 사용시간) 조합·팁 주제를 고른다 (같은 숫자의 글이 되풀이되면 검수 R9 에 막힌다)
     subject = generator.pick_subject(products, post_type, tomorrow, used, offset=i, bundles=bundles,
-                                     talk_topics=cfg.talk_topics)
+                                     talk_topics=cfg.talk_topics, gift=gift if post_type == "gift" else None)
     picked, topic, bundle = subject["picked"], subject["tip_topic"], subject.get("bundle")
     if post_type == "tip":
         # tip 은 예시 계산에 쓸 상품 1개를 고른다 (링크는 붙이지 않음)
         picked = generator.pick_subject(products, "calc", tomorrow, used, offset=i)["picked"]
     if post_type == "bundle":
         rows = [{"name": it.name, "note": it.note, "link": bundle.link} for it in bundle.items]
+    elif post_type == "gift":
+        import gift_app
+        rows = gift_app.review_rows(gift)
     else:
         rows = reviewer_mod.product_rows(picked) if post_type not in generator.NO_LINK_TYPES else []
     check = reviewer_mod.make_check(rev, rows, newest_first[:reviewer_mod.RECENT_POSTS_LIMIT])
     post = generator.generate_post(post_type, picked, tariff, cfg, complete, variant=variant, tip_topic=topic,
                                    checks=[check], history=history + made, now=now,
-                                   hours=subject["hours"], recent_texts=same_type, bundle=bundle)
+                                   hours=subject["hours"], recent_texts=same_type, bundle=bundle,
+                                   gift=gift if post_type == "gift" else None)
     return _schedule(post, used, cfg, occupying, made, day_start, tomorrow)
 
 

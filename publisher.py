@@ -286,6 +286,16 @@ def check_link(url: str) -> str | None:
     return None
 
 
+def make_gift_link_checker(gift):
+    """쿠팡 간편링크 또는 gift_app.yaml 에 등록한 내 앱 주소. 앱 주소에도 HTTP 요청은 보내지 않는다."""
+    import gift_app
+
+    def check(url: str) -> str | None:
+        coupang = check_link(url)
+        return None if coupang is None or gift_app.link_problem(url, gift) is None else coupang
+    return check
+
+
 # ── 발행 직전 검사 + 발행 ──────────────────────────────────────────────────
 
 def publish_time_problems(post: dict, published: list[dict], cfg: Config, now: datetime) -> list[str]:
@@ -505,6 +515,11 @@ def main() -> int:
         link_checker = app_posts.make_link_checker(app_posts.load_apps())
     else:
         link_checker = check_link
+        if "gift" in cfg.post_types:
+            # 선물지니 글(2026-11-14)은 내 앱 주소로 링크한다. 그 글만 앱 주소를 받고, 나머지는 쿠팡 간편링크만
+            import gift_app
+            gift = gift_app.load_gift_app()
+            link_checker = make_gift_link_checker(gift)
     result = run_once(store, cfg, api=api, link_checker=link_checker, notifier=make_notifier(secrets),
                       exam_status=exam.exam_status(cfg), reply_reader=reader, media_host=media_host)
     log.info(f"결과: {json.dumps(result, ensure_ascii=False)}")

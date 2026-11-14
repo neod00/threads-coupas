@@ -82,10 +82,24 @@ def build_app_case(case: dict, data: dict, cfg: Config) -> tuple[dict, list[dict
     return post, app_posts.review_rows(app), recent
 
 
+def build_gift_case(case: dict, data: dict, cfg: Config) -> tuple[dict, list[dict], list[str]]:
+    """선물지니 글 케이스 (2026-11-14): 생성기와 같이 답글 둘째 줄에 '내가 만든 앱' 문장을 붙인다."""
+    import gift_app
+
+    app = gift_app.parse_gift_app(data["gift_app"])
+    post = {"type": "gift", "text": f"{case['hook']}\n\n{case['body']}",
+            "reply_text": f"{cfg.disclosure_text}\n{gift_app.OWNER_LINE}\n\n{case['reply_line']}",
+            "has_link": True, "link_url": app.url, "variant": "link_in_reply",
+            "calc_payload": gift_app.build_payload(app, case["occasion"])}
+    return post, gift_app.review_rows(app), []
+
+
 def build_case(case: dict, data: dict, cfg: Config) -> tuple[dict, list[dict], list[str]]:
     """(게시물, 상품 행, 최근 글 본문). 생성기와 같은 방식으로 조립한다."""
     if "apps" in data:
         return build_app_case(case, data, cfg)
+    if case["type"] == "gift":
+        return build_gift_case(case, data, cfg)
     tariff = calculator.parse_tariff(data["tariff"])
     by_id = {p.product_id: p for p in parse_products(data["products"])}
     picked = [by_id[pid] for pid in case["product_ids"]]

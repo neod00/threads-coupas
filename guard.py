@@ -35,7 +35,7 @@ HOOK_MAX_CHARS = 30
 HOOK_MAX_CHARS_BY_LANG = {"ko": HOOK_MAX_CHARS, "en": 60}
 HANGUL_RE = re.compile(r"[\u1100-\u11ff\u3130-\u318f\uac00-\ud7a3]")
 CALC_POST_TYPES = ("calc", "compare")           # 전기요금 계산 글: 가정 문구 필수 (G6)
-LINK_POST_TYPES = ("calc", "compare", "pick", "bundle")   # 링크가 붙는 글
+LINK_POST_TYPES = ("calc", "compare", "pick", "bundle", "gift")   # 링크가 붙는 글
 # 경험 표현. 사용자가 직접 쓴 경험 메모(calc_payload.product.experience)가 있는 글에서만 허용한다 (2026-10-16)
 EXPERIENCE_WORDS = ("써봤", "사용해보니", "써보니", "우리 집")
 URL_RE = re.compile(r"https?://[^\s<>\"')\]]+", re.IGNORECASE)
@@ -193,6 +193,12 @@ def check_post(post: dict, cfg: Config) -> list[str]:
         problems.append("[G2] 링크 글인데 링크와 대가성 문구를 넣을 답글이 없습니다")
     elif reply_has_link and _lines(reply)[0] != disclosure:
         problems.append("[G2] 링크가 있는 답글인데 답글 첫 줄이 대가성 문구가 아닙니다")
+    if post_type == "gift":
+        # 선물지니 글 (2026-11-14): 내가 만든 앱이라는 사실을 답글 둘째 줄에 밝힌다 (gift_app.OWNER_LINE)
+        import gift_app
+        lines = _lines(reply)
+        if len(lines) < 2 or lines[1] != gift_app.OWNER_LINE:
+            problems.append(f"[G2] 선물지니 글의 답글 둘째 줄이 \"{gift_app.OWNER_LINE}\" 가 아닙니다")
 
     # G3 숫자 (규칙 7)
     allowed = allowed_numbers(payload)

@@ -88,7 +88,8 @@ test_start_date: 2026-10-19   # sabol.kka 첫 실제 발행일
 # 링크 글 2자리 = 소개(pick)·시즌 모음(bundle, 시즌 중 이틀에 한 번 첫 자리), 링크 없는 1자리 = 참여형(talk). 2026-10-24 sabolkka bundle 다시 켬.
 # 2026-11-14 사용자 결정: bundle 끔. 10개 조회수 중앙값 24·좋아요 1 (pick 47, talk 73). 링크 글 3자리 모두 pick.
 #   pick 이 하루 3개라 상품 30개면 10일에 한 바퀴 (ops_advice 보충 알림 기준 10일과 같음)
-post_types: [pick, talk]
+# 2026-11-14 사용자 결정: 선물지니(내가 만든 선물 추천 앱) 글 gift 추가. 수·토요일에 링크 글 한 자리 (data/gift_app.yaml, PLAN 1-4)
+post_types: [pick, talk, gift]
 
 # ── 계정 전용 설정 (2026-10-18) ──────────────────────────────
 tone: casual                  # 친근한 반말. 생성 프롬프트는 accounts/sabolkka/prompts/, 검수 R11 은 이 값을 따른다

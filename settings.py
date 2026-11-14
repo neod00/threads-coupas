@@ -124,7 +124,7 @@ MODEL_PROVIDERS = (
     ("o4", "openai"),
 )
 # 글 유형 이름 (generator.POST_TYPES 와 같아야 한다)
-COUPANG_POST_TYPES = ("calc", "compare", "pick", "bundle", "talk", "tip")
+COUPANG_POST_TYPES = ("calc", "compare", "pick", "bundle", "talk", "tip", "gift")   # gift: 선물지니 글 (2026-11-14)
 # 앱 홍보 계정 (2026-10-30, PLAN 1-2): 앱 소개(launch)·기능 하나(feature)·실제로 고친 것(devlog)·질문(ask)
 APP_POST_TYPES = ("launch", "feature", "devlog", "ask")
 POST_TYPE_NAMES = COUPANG_POST_TYPES + APP_POST_TYPES
