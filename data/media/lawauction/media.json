@@ -1,0 +1,44 @@
+{
+  "home": {
+    "file": "lawauction/home.png",
+    "kind": "image",
+    "feature": "첫 화면 — 전국 법원 파산·회생 자산매각 공고 검색",
+    "captured_at": "2026-11-14T07:21:03+00:00"
+  },
+  "rounds": {
+    "file": "lawauction/rounds.png",
+    "kind": "image",
+    "feature": "회차표 — 회차마다 최저입찰가가 내려가는 폭",
+    "captured_at": "2026-11-14T07:21:03+00:00"
+  },
+  "new-notices": {
+    "file": "lawauction/new-notices.png",
+    "kind": "image",
+    "feature": "새로 올라온 공고 목록",
+    "captured_at": "2026-11-14T07:21:03+00:00"
+  },
+  "asset-types": {
+    "file": "lawauction/asset-types.png",
+    "kind": "image",
+    "feature": "자산 유형별 게시 중 공고 수",
+    "captured_at": "2026-11-14T07:21:03+00:00"
+  },
+  "round-cost": {
+    "file": "lawauction/round-cost.png",
+    "kind": "image",
+    "feature": "회차별 총비용 계산기 — 최저입찰가 + 취득세 + 기타 비용",
+    "captured_at": "2026-11-14T07:21:03+00:00"
+  },
+  "acquisition-tax": {
+    "file": "lawauction/acquisition-tax.png",
+    "kind": "image",
+    "feature": "취득세 계산기",
+    "captured_at": "2026-11-14T07:21:03+00:00"
+  },
+  "rounds-demo": {
+    "file": "lawauction/rounds-demo.mp4",
+    "kind": "video",
+    "feature": "공고 모아 보기·회차표·총비용 계산 시연 — 전국 법원 공고를 모은 첫 화면에서 회차표와 계산기까지",
+    "captured_at": "2026-11-14T07:21:03+00:00"
+  }
+}

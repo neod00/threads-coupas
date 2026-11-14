@@ -50,8 +50,8 @@ APPS_PATH = ACCOUNT_DIR / "data" / "apps.yaml"
 SAMPLES_DIR = ACCOUNT_DIR / "data" / "app_samples"
 MANIFEST = "media.json"
 ID_RE = re.compile(r"[a-z0-9][a-z0-9-]{0,40}")
-STEP_KINDS = ("goto", "click", "upload", "fill", "type", "press", "wait", "wait_for", "zoom", "unzoom", "caption",
-              "title")
+STEP_KINDS = ("goto", "click", "upload", "fill", "type", "press", "wait", "wait_for", "scroll_to", "zoom", "unzoom",
+              "caption", "title")
 VIDEO_ONLY_KINDS = ("zoom", "unzoom", "caption", "title")       # 화면 캡처(shots)에서는 쓰지 않는다
 VIEWPORT = {"width": 390, "height": 844}
 SCALE = 2
@@ -67,6 +67,23 @@ END_CARD_MS = 2200
 TITLE_MS = 1700                 # 첫 화면 훅 문구를 보여 주는 시간 (그 뒤 0.4초 동안 사라진다)
 TAP_LEAD_MS = 260               # 누르는 표시가 퍼지기 시작하고 실제로 누르기까지
 FONT = '"Noto Sans CJK KR","Noto Sans KR","Malgun Gothic",sans-serif'    # JS 작은따옴표 문자열 안에 들어간다
+SCROLL_TOP_PX = 96              # scroll_to: 고정 머리글에 가리지 않게 요소 위로 남기는 여백
+SCROLL_SETTLE_MS = 900          # 스크롤 뒤 나타나는 효과(reveal)가 끝날 때까지
+
+# scroll_to: 요소가 화면 위쪽에 오게 스크롤한다. 영상에서는 부드럽게
+SCROLL_JS = """([sel, smooth, top]) => {
+  const el = document.querySelector(sel);
+  if (!el) throw new Error('scroll_to: 요소가 없습니다 ' + sel);
+  window.scrollTo({top: el.getBoundingClientRect().top + window.scrollY - top, behavior: smooth ? 'smooth' : 'instant'});
+}"""
+
+# 규칙 2: 남의 광고가 캡처에 찍히지 않게 광고 자리를 접는다 (앱 밖 주소의 창은 _open 에서 막는다, 2026-11-14 로옥션)
+HIDE_ADS_CSS = "ins.adsbygoogle,iframe,[id^=google_ads],[id^=aswift]{display:none !important}"
+HIDE_ADS_JS = """(() => {
+  const add = () => { const st = document.createElement('style'); st.textContent = '__CSS__';
+    (document.head || document.documentElement).appendChild(st); };
+  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', add); else add();
+})()""".replace("__CSS__", HIDE_ADS_CSS)
 
 # 자막: 아래쪽 어두운 띠. 페이지(body) 밖 html 에 붙여 확대(body transform)의 영향을 받지 않는다.
 # 이미 있으면 위로 사라졌다가 새 문구로 아래에서 올라온다 (장면 전환)
@@ -393,6 +410,10 @@ def run_steps(page, app: App, steps, samples_dir: Path | None = None, *, slow: b
             page.wait_for_timeout(value)
         elif kind == "wait_for":
             page.wait_for_selector(value, state="visible", timeout=STEP_TIMEOUT_MS)
+        elif kind == "scroll_to":
+            page.wait_for_selector(value, state="attached", timeout=STEP_TIMEOUT_MS)
+            page.evaluate(SCROLL_JS, [value, slow, SCROLL_TOP_PX])
+            page.wait_for_timeout(SCROLL_SETTLE_MS)
         elif kind == "zoom":
             page.wait_for_selector(value["selector"], state="visible", timeout=STEP_TIMEOUT_MS)
             page.evaluate(ZOOM_JS, [value["selector"], value["scale"]])
@@ -534,13 +555,14 @@ def _open(browser, app: App, blocked: list[str], locale: str = "ko-KR"):
     is_mobile 은 끈다: 켜면 확대한 내용 때문에 화면 기준이 넓어져 자막·끝 화면이 밀린다 (2026-10-30 시험)."""
     context = browser.new_context(viewport=VIEWPORT, device_scale_factor=SCALE, is_mobile=False, has_touch=True,
                                   locale=locale)
+    context.add_init_script(HIDE_ADS_JS)
     page = context.new_page()
 
     def guard(route, request):
-        if request.is_navigation_request() and request.frame == page.main_frame \
-                and not host_allowed(request.url, app.hosts):
-            blocked.append(request.url)
-            return route.abort()
+        if request.is_navigation_request() and not host_allowed(request.url, app.hosts):
+            if request.frame == page.main_frame:
+                blocked.append(request.url)
+            return route.abort()            # 앱 밖 주소의 창(광고 iframe 등)은 열지 않는다
         return route.continue_()
 
     page.route("**/*", guard)

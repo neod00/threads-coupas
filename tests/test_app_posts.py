@@ -162,6 +162,23 @@ def test_launch_once_per_app_and_features_after_launch(apps):
     assert len(app_posts.subjects(apps, "feature", used)) == 5
 
 
+def test_two_apps_take_turns(apps, app_cfg):
+    # 2026-11-14: 앱이 둘 이상이면 아직 소개하지 않은 앱을 먼저 소개하고, 그 뒤 기능 글은 앱을 번갈아 고른다
+    second = dataclasses.replace(apps[0], id="demo-two", name="Demo Two")
+    both = (apps[0], second)
+    used = [used_post("launch", "launch|demo-pdf"), used_post("feature", "feature|demo-pdf|edit-text")]
+    assert app_posts.plan_day([], app_cfg, TOMORROW, both, used)[0] == "launch"
+    assert app_posts.pick_subject(both, "launch", TOMORROW, used)["app"].id == "demo-two"
+    used.append(used_post("launch", "launch|demo-two", app="demo-two"))
+    picked = []
+    for day in range(4):
+        s = app_posts.pick_subject(both, "feature", TOMORROW + timedelta(days=day), used)
+        picked.append(s["app"].id)
+        used.append(used_post("feature", s["key"], app=s["app"].id))
+    assert picked == ["demo-pdf", "demo-two", "demo-pdf", "demo-two"]
+    assert used[-4]["calc_payload"]["subject"] != "feature|demo-pdf|edit-text"     # 그 앱 안에서는 안 쓴 기능부터
+
+
 def test_devlog_uses_each_update_once(apps):
     first = app_posts.pick_subject(apps, "devlog", TOMORROW, [])
     second = app_posts.pick_subject(apps, "devlog", TOMORROW, [used_post("devlog", first["key"])])
@@ -293,7 +310,7 @@ def test_app_reviewer_prompt_is_used_for_app_account(app_cfg, cfg):
 def test_app_exam_case_counts_and_items():
     block = [c for c in CASES["cases"] if c["expect"] == "block"]
     normal = [c for c in CASES["cases"] if c["expect"] == "pass"]
-    assert len(block) == 20 and len(normal) == 10
+    assert len(block) == 22 and len(normal) == 12          # 2026-11-14 법원 매각 공고 앱 케이스 4개 추가
     covered = {v for c in block for v in c["violations"]}
     assert {"R2", "R3", "R4", "R5", "R6", "R7", "R10", "R11", "R12"} <= covered
     assert {c["type"] for c in normal} == {"launch", "feature", "devlog", "ask"}

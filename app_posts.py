@@ -232,14 +232,19 @@ def subject_key(post: dict) -> str | None:
 
 
 def pick_subject(apps, post_type: str, day: date, used, offset: int = 0) -> dict | None:
-    """가장 오래 안 쓴 주제. 한 번도 안 쓴 주제가 먼저, 동률이면 날짜로 돌린다. 고를 게 없으면 None."""
+    """가장 오래 안 쓴 주제. 앱이 여럿이면 가장 오래 글이 안 나간 앱을 먼저 고르고(앱을 번갈아, 2026-11-14),
+    그 앱 안에서 한 번도 안 쓴 주제가 먼저, 동률이면 날짜로 돌린다. 고를 게 없으면 None."""
     candidates = subjects(apps, post_type, used)
     if not candidates:
         return None
-    last = {}
+    last, app_last = {}, {}
     for i, post in enumerate(used):
         if key := subject_key(post):
             last[key] = i
+        for app_id in post.get("product_ids") or []:
+            app_last[app_id] = i
+    oldest_app = min(app_last.get(c["app"].id, -1) for c in candidates)
+    candidates = [c for c in candidates if app_last.get(c["app"].id, -1) == oldest_app]
     best = min(last.get(c["key"], -1) for c in candidates)
     pool = [c for c in candidates if last.get(c["key"], -1) == best]
     return pool[(day.toordinal() + offset) % len(pool)]

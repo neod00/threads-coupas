@@ -147,7 +147,7 @@ class FakePage:
     def evaluate(self, script, arg=None):
         names = {capture.CAPTION_JS: "caption", capture.ZOOM_JS: "zoom", capture.UNZOOM_JS: "unzoom",
                  capture.END_JS: "end", capture.TITLE_JS: "title", capture.TITLE_OUT_JS: "title_out",
-                 capture.TAP_JS: "tap"}
+                 capture.TAP_JS: "tap", capture.SCROLL_JS: "scroll"}
         self.log.append((names.get(script, "js"), arg))
 
 
@@ -171,12 +171,15 @@ class FakeCdp:
 
 class FakeBrowser:
     def __init__(self, redirect=None):
-        self.pages, self.redirect = [], redirect
+        self.pages, self.redirect, self.init_scripts = [], redirect, []
 
     def new_context(self, **kw):
         browser = self
 
         class Context:
+            def add_init_script(self, script):
+                browser.init_scripts.append(script)
+
             def new_page(self):
                 page = FakePage(browser.redirect)
                 browser.pages.append(page)
@@ -252,6 +255,32 @@ def test_navigation_outside_app_fails_and_saves_nothing(dirs):
     assert "앱 밖 주소" in result["failed"]["demo/home"] and result["saved"] == []
     assert browser.pages[0].log[-1] == ("goto", "https://ads.example/landing", "abort")
     assert not (images / "demo" / "home.png").exists()
+
+
+def test_scroll_to_step(dirs):
+    images, samples = dirs
+    apps = capture.parse_apps(app_raw(steps=[{"goto": "/"}, {"scroll_to": "#feat-title"}]))
+    browser = FakeBrowser()
+    result = capture.capture(apps, browser=browser, media_dir=images, samples_dir=samples, now=NOW)
+    assert result["saved"] == ["demo/home"]
+    log = browser.pages[0].log
+    i = log.index(("wait_for", "#feat-title"))
+    assert log[i + 1] == ("scroll", ["#feat-title", False, capture.SCROLL_TOP_PX])
+    assert log[i + 2] == ("wait", capture.SCROLL_SETTLE_MS)
+
+
+def test_ads_hidden_and_foreign_frames_not_opened(dirs):
+    # 규칙 2: 남의 광고가 찍히지 않게 광고 자리를 접고, 앱 밖 주소의 창(iframe)은 열지 않는다. 그래도 화면은 저장된다
+    images, samples = dirs
+    browser = FakeBrowser()
+    result = capture.capture(capture.parse_apps(app_raw()), browser=browser, media_dir=images, samples_dir=samples, now=NOW)
+    assert result["saved"] == ["demo/home"] and capture.HIDE_ADS_JS in browser.init_scripts
+    page, route = browser.pages[0], FakeRoute()
+    page.handler(route, FakeRequest("https://googleads.example/ad", frame=object()))
+    assert route.result == "abort"
+    inside = FakeRoute()
+    page.handler(inside, FakeRequest("https://demo.example/embed", frame=object()))
+    assert inside.result == "continue"
 
 
 def test_upload_outside_samples_folder_fails(dirs):

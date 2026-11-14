@@ -13,6 +13,7 @@
 #   press: 키                 키 누르기 (예: Enter, Control+A). 여러 번: {key: Backspace, times: 10}
 #   wait: 밀리초              기다리기
 #   wait_for: CSS 선택자       그 요소가 보일 때까지 기다리기
+#   scroll_to: CSS 선택자      그 요소가 화면 위쪽에 오게 스크롤 (영상에서는 부드럽게)
 # 영상(clips)의 steps 에서만:
 #   zoom: {selector, scale}   그 요소 쪽으로 부드럽게 확대 (scale 1~3)
 #   unzoom: true              확대를 풀고 원래 화면으로
@@ -162,3 +163,129 @@ apps:
           - zoom: {selector: '[aria-label="줄 수정: 계약서"]', scale: 2.2}
           - caption: 파일은 내 브라우저 밖으로 안 나가요
           - wait: 1600
+
+  - id: lawauction
+    name: 로옥션
+    url: https://www.courtauction.site/
+    # www 없는 주소로 넘어가므로 함께 허용한다 (2026-11-14 확인)
+    allowed_hosts: [courtauction.site]
+    # 글감 (2026-11-14 사이트 첫 화면·소개 페이지에서 옮겨 적음). 사람이 확인하고 고친다.
+    # 투자 권유처럼 보이지 않게: 싸게 산다·돈 된다는 말은 쓰지 않는다. "최저가"는 금지어라 "최저입찰가"로 적는다 (규칙 7)
+    info:
+      one_liner: 법원마다 따로 올라오는 파산·회생 자산매각 공고를 한곳에 모아 회차별 최저입찰가까지 정리하는 사이트
+      audience: 법원 파산·회생 자산매각(공매) 공고를 찾아보는 사람
+      problem: 파산·회생 자산매각 공고는 법원마다 게시판에 따로 올라오고, 회차마다 최저입찰가가 얼마인지는 첨부 공고문을 하나씩 열어 봐야 안다
+      how: 전국 17개 법원 게시판을 하루 3번 확인해 공고를 모으고, 첨부 공고문을 읽어 회차별 최저입찰가를 표로 옮긴다
+      facts:
+        - 무료
+        - 회원가입 없음
+        - 전국 17개 법원의 파산·회생 자산매각 공고를 모은다
+        - 법원 게시판을 하루 3번 확인해 새 공고를 모은다
+        - 첨부 공고문을 읽어 회차마다 최저입찰가가 얼마까지 내려가는지 표로 정리한다
+        - 부동산·기계설비·채권·차량·특허 같은 자산 유형과 법원별로 공고를 나눠 본다
+        - 취득세·회차별 총비용·입찰보증금 같은 계산기 10종이 있다
+      limits:
+        - 혼자 만들고 운영하는 민간 서비스라 법원과 제휴하지 않았고, 공고의 효력과 조건은 법원 원문이 기준이다
+        - 낙찰 여부와 낙찰 금액은 법원이 공개하지 않아 보여 주지 않는다
+        - 회차표는 첨부 공고문에서 읽은 참고 정보이고, 2회차 이후는 앞 회차가 유찰돼야 열린다
+        - 첨부 공고문을 읽지 못한 공고는 회차표 없이 원문 링크만 보여 준다
+        - 법률·세무 판단을 대신하지 않는다
+      # 만든 사람이 직접 들려준 진짜 이야기를 여기에 적는다 (만든 계기 등). 비어 있으면 소개 글에 1인칭 경험을 쓰지 않는다
+      stories: []
+      link: https://www.courtauction.site/
+      launch_media: [rounds-demo, rounds, home]
+      features:
+        - id: rounds
+          name: 회차별 최저입찰가 표
+          desc: 첨부 공고문을 읽어 회차마다 최저입찰가가 1회차의 몇 퍼센트까지 내려가는지 표로 보여 준다. 2회차 이후는 앞 회차가 유찰돼야 열린다
+          media: rounds
+          clip: rounds-demo
+        - id: collect
+          name: 법원 공고 모아 보기
+          desc: 전국 17개 법원 게시판의 파산·회생 자산매각 공고를 하루 3번 모아, 법원·자산 유형·검색어로 찾는다
+          media: home
+          clip: rounds-demo
+        - id: new-notices
+          name: 새로 올라온 공고
+          desc: 최근 7일 안에 법원 게시판에 올라온 공고만 모아 보고, 최신순·만료 임박순·최저입찰가 낮은순으로 정렬한다
+          media: new-notices
+        - id: asset-types
+          name: 자산 유형별 공고
+          desc: 부동산·기계설비·채권·차량·특허 같은 자산 유형마다 지금 게시 중인 공고 수와 이번 주 새 공고 수를 보여 준다
+          media: asset-types
+        - id: round-cost
+          name: 회차별 총비용 계산기
+          desc: 1회차 최저입찰가와 회차당 인하율을 넣으면 회차마다 최저입찰가에 취득세와 기타 비용을 더한 총비용을 나란히 보여 준다
+          media: round-cost
+        - id: acquisition-tax
+          name: 취득세 계산기
+          desc: 취득가액을 넣으면 주택 수·조정대상지역·면적에 따라 취득세를 계산한다
+          media: acquisition-tax
+      updates: []
+    shots:
+      - id: home
+        feature: 첫 화면 — 전국 법원 파산·회생 자산매각 공고 검색
+        steps:
+          - goto: /
+          - wait: 1500
+      - id: rounds
+        feature: 회차표 — 회차마다 최저입찰가가 내려가는 폭
+        steps:
+          - goto: /
+          - scroll_to: "#feat-title"
+          - wait: 800
+      - id: new-notices
+        feature: 새로 올라온 공고 목록
+        steps:
+          - goto: /
+          - scroll_to: "#upcoming-title"
+          - wait: 800
+      - id: asset-types
+        feature: 자산 유형별 게시 중 공고 수
+        steps:
+          - goto: /
+          - scroll_to: "#types-title"
+          - wait: 800
+      - id: round-cost
+        feature: 회차별 총비용 계산기 — 최저입찰가 + 취득세 + 기타 비용
+        steps:
+          - goto: /tools/round-cost
+          - click: "#rc-first"
+          - type: "100000000"
+          - wait: 600
+          - scroll_to: "table"
+      - id: acquisition-tax
+        feature: 취득세 계산기
+        steps:
+          - goto: /tools/acquisition-tax
+          - click: '[aria-label="취득가액"]'
+          - type: "300000000"
+          - wait: 800
+    clips:
+      - id: rounds-demo
+        feature: 공고 모아 보기·회차표·총비용 계산 시연 — 전국 법원 공고를 모은 첫 화면에서 회차표와 계산기까지
+        end: {title: 로옥션, sub: 무료 · 가입 없음 · 전국 17개 법원, cta: 링크는 댓글에 있어, color: "#1f3d7a"}
+        setup:
+          - goto: /
+          - wait: 800
+        steps:
+          # 장면 1: 훅 (첫 프레임 = 미리보기 그림)
+          - title: {text: "법원 17곳 매각 공고\n한곳에 모았어", sub: 회차별 최저입찰가까지}
+          - caption: 법원마다 따로 올라오는 공고를 한곳에
+          - wait: 1400
+          # 장면 2: 회차표
+          - caption: 회차마다 최저입찰가가 얼마까지 내려가는지
+          - scroll_to: "#feat-title"
+          - wait: 2200
+          # 장면 3: 새 공고
+          - caption: 새로 올라온 공고만 따로
+          - scroll_to: "#upcoming-title"
+          - wait: 1600
+          # 장면 4: 계산기
+          - goto: /tools/round-cost
+          - caption: 회차별 총비용도 바로 계산
+          - click: "#rc-first"
+          - type: "100000000"
+          - wait: 400
+          - scroll_to: "table"
+          - wait: 1800
