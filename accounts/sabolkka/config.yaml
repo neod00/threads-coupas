@@ -92,6 +92,7 @@ post_types: [pick, talk]
 
 # ── 계정 전용 설정 (2026-10-18) ──────────────────────────────
 tone: casual                  # 친근한 반말. 생성 프롬프트는 accounts/sabolkka/prompts/, 검수 R11 은 이 값을 따른다
+reply_drafts: true            # 2026-11-14 사용자 결정: 일일 요약에 답글 초안 (하루 최대 6개). 초안만, 자동으로 달지 않는다 (reply_drafts.py)
 ops_advice: true            # 일일 요약에 "상품 링크 보충 필요"·"발행 수 늘려도 돼요" 알림 (ops_advice.py)
 reply_delay_hours: 1          # 링크 답글(광고 문구 + 링크)을 본문 발행 1시간 뒤에 단다
                               # 2026-11-14 사용자 결정: 3 → 1. 링크 글 조회 주 1,000~1,500회에 클릭 2~8회라, 초반 독자가

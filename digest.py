@@ -5,6 +5,7 @@
   - 상태: 문제가 없으면 "상태: 정상" 한 줄. 자동 정지·시험지 불합격·토큰 경고가 있을 때만 자세히
   - 운영 알림 (상품 링크 보충·발행 수 늘리기, ops_advice)
   - 오늘 둘러볼 검색어
+  - 답글 초안 (config reply_drafts: true 인 계정만, reply_drafts.py. 초안만 보여 주고 올리지 않는다)
   - 내일 발행 예정·오늘 발행 개수, 최근 36시간 보류(held) 개수 (보류는 있을 때만)
   개별 글·사유·post_id·답해 줄 답글은 모니터링 화면(monitor_app.py)에서 본다
 
@@ -65,7 +66,8 @@ def held_reason(post: dict) -> str:
 
 
 def build_digest(store, cfg: Config, now: datetime, *, dry_run: bool, token_issued_at=None,
-                 exam: tuple[bool, str] | None = None, products=None, hot: list[dict] | None = None) -> str:
+                 exam: tuple[bool, str] | None = None, products=None, hot: list[dict] | None = None,
+                 drafts: list[dict] | None = None) -> str:
     today = rules.kst_date(now)
     tomorrow = today + timedelta(days=1)
     lines = [f"[일일 요약] {today:%Y-%m-%d} ({'연습 모드 DRY_RUN' if dry_run else '실제 발행'})"]
@@ -100,6 +102,9 @@ def build_digest(store, cfg: Config, now: datetime, *, dry_run: bool, token_issu
         words = [pool[(start + i) % len(pool)] for i in range(3)]
         lines.append("오늘 둘러볼 검색어: " + ", ".join(words) + " — 남의 글 5개에 진심 답글 달기 (10분)")
     lines.append("")
+    if drafts:
+        import reply_drafts
+        lines += reply_drafts.section(drafts) + [""]
 
     # 발행 현황은 개수만. 개별 글은 모니터링 화면에서 본다
     upcoming = [p for p in store.list_posts(["approved"])
@@ -159,8 +164,18 @@ def main() -> int:
                                       datetime.now(KST).date())
         except Exception as e:     # 검색어는 덤이다. 실패해도 요약은 보낸다
             log.warning(f"네이버 검색 트렌드를 읽지 못해 기본 검색어를 씁니다: {e}")
+    drafts = None
+    if cfg.reply_drafts:
+        import reply_drafts
+        from llm_client import LLMError, make_complete
+        from settings import provider_of
+        try:
+            complete = make_complete(cfg.generator_model, secrets.api_key_for(provider_of(cfg.generator_model)))
+            drafts = reply_drafts.make_drafts(store, cfg, complete, datetime.now(timezone.utc))
+        except (LLMError, ConfigError) as e:     # 초안은 덤이다. 키가 없어도 요약은 보낸다
+            log.warning(f"답글 초안을 건너뜁니다: {e}")
     send_digest(store, cfg, notifier, dry_run=dry_run(), token_issued_at=secrets.threads_token_issued_at,
-                exam=exam.exam_status(cfg), products=products, hot=hot)
+                exam=exam.exam_status(cfg), products=products, hot=hot, drafts=drafts)
     return 0
 
 
