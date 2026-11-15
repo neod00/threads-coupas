@@ -62,6 +62,9 @@ jobs:
           SUPABASE_SERVICE_ROLE_KEY: ${{ secrets[format('SUPABASE_SERVICE_ROLE_KEY{0}', env.SFX)] }}
           TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
           TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+          # 내 글 답글 자동 응대 (config reply_auto: true 인 계정만, auto_reply.py). REPLY_AUTO_<계정> 이 정확히 true 일 때만 실제로 단다
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+          REPLY_AUTO: ${{ vars[format('REPLY_AUTO{0}', env.SFX)] }}
         run: |
           echo "DRY_RUN=${DRY_RUN}"
           python publisher.py

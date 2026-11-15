@@ -426,9 +426,10 @@ def expire_if_past_day(post: dict, *, store, now: datetime, dry_run: bool) -> bo
 
 def run_once(store, cfg: Config, *, env=None, api, link_checker, notifier, now: datetime | None = None,
              exam_status: tuple[bool, str], sleep: Callable[[float], None] = time.sleep,
-             reply_reader=None, media_host=None) -> dict:
+             reply_reader=None, media_host=None, reply_complete=None) -> dict:
     """publish.yml 한 번 실행분. 킬 스위치는 main 에서도 먼저 확인하지만 여기서도 다시 본다.
-    reply_reader: 답글을 읽을 API (conversation). 있으면 발행 전에 답글 감시를 먼저 돌린다 (규칙 10-1)."""
+    reply_reader: 답글을 읽을 API (conversation). 있으면 발행 전에 답글 감시를 먼저 돌린다 (규칙 10-1).
+    reply_complete: 자동 답글 초안용 LLM (cfg.reply_auto 계정만, auto_reply.py). 자동 정지 중에는 돌지 않는다."""
     from settings import auto_publish_disabled, dry_run as dry_run_flag
 
     if auto_publish_disabled(env):
@@ -454,6 +455,15 @@ def run_once(store, cfg: Config, *, env=None, api, link_checker, notifier, now: 
             log.error(f"규칙 9: 검수자 시험지 불합격 상태라 발행을 거부합니다 — {exam_reason}")
             return {"action": "refused", "reason": exam_reason}
         log.warning(f"검수자 시험지 불합격 — 실제 발행이었다면 거부됩니다 ({exam_reason})")
+
+    # 내 글 답글에 자동 답글 (2026-11-15, sabol.kka). 실패해도 발행은 계속한다
+    if cfg.reply_auto and reply_complete is not None:
+        import auto_reply
+        try:
+            auto_reply.run(store, cfg, api=api, complete=reply_complete, now=now,
+                           live=auto_reply.live(env), dry_run=dry_run, sleep=sleep)
+        except Exception as e:
+            log.error(f"[자동 답글] 이번 실행은 건너뜁니다: {e}")
 
     # 답글만 실패했던 글: 답글만 재시도
     for post in store.list_posts(["published"]):
@@ -520,8 +530,17 @@ def main() -> int:
             import gift_app
             gift = gift_app.load_gift_app()
             link_checker = make_gift_link_checker(gift)
+    reply_complete = None
+    if cfg.reply_auto:
+        from llm_client import LLMError, make_complete
+        from settings import provider_of
+        try:
+            reply_complete = make_complete(cfg.generator_model, secrets.api_key_for(provider_of(cfg.generator_model)))
+        except (LLMError, ConfigError) as e:      # 자동 답글은 덤이다. 키가 없어도 발행은 한다
+            log.warning(f"[자동 답글] 건너뜁니다: {e}")
     result = run_once(store, cfg, api=api, link_checker=link_checker, notifier=make_notifier(secrets),
-                      exam_status=exam.exam_status(cfg), reply_reader=reader, media_host=media_host)
+                      exam_status=exam.exam_status(cfg), reply_reader=reader, media_host=media_host,
+                      reply_complete=reply_complete)
     log.info(f"결과: {json.dumps(result, ensure_ascii=False)}")
     return 0 if result["action"] != "failed" else 1
 

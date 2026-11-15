@@ -2,7 +2,8 @@
 답글 감시 (PLAN v2 Step 8, 규칙 10 조건 1). publish.yml 이 발행 전에 먼저 실행한다.
 
 최근 72시간 안에 발행한 내 글의 답글을 읽어 "스팸", "신고", "광고충", "사기", "허위" 가 있으면
-킬 스위치와 같이 발행을 멈추고 알림을 보낸다. 답글에 자동으로 대응하는 기능은 없다 (규칙 6).
+킬 스위치와 같이 발행을 멈추고 알림을 보낸다. 여기서는 답하지 않는다.
+모은 답글(reply_inbox)에 자동으로 답하는 것은 reply_auto: true 계정만 auto_reply.py 가 한다 (2026-11-15, sabol.kka).
 - 스팸·신고·사기는 고발하는 문맥일 때만 정지하고, "사기 전에" 같은 일상 표현이면 알림만 보낸다 (PLAN 1-3)
 - 내가 단 답글(링크 답글)은 보지 않는다 (is_reply_owned_by_me)
 - 한 번 본 답글은 system_state 에 기록해 다시 판정하지 않는다
@@ -21,7 +22,7 @@ log = logging.getLogger("threads_coupas")
 WATCH_HOURS = 72
 SEEN_KEY = "seen_reply_ids"
 SEEN_LIMIT = 5000
-INBOX_KEY = "reply_inbox"       # 사람이 답해 줄 남의 답글 (일일 요약에 보여 줌. 자동으로 답하지 않는다 — 규칙 6)
+INBOX_KEY = "reply_inbox"       # 내 글에 달린 남의 답글 (답글 초안·자동 답글이 여기서 고른다)
 INBOX_LIMIT = 200
 
 

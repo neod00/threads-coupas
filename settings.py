@@ -407,6 +407,9 @@ class Config:
     ops_advice: bool = False
     # 일일 요약에 우리 글 답글에 달 초안을 넣을지 (reply_drafts.py, 2026-11-14). 초안만 만들고 스레드에 올리지 않는다 (규칙 6)
     reply_drafts: bool = False
+    # 내 글 답글에 초안을 자동으로 달지 (auto_reply.py, 2026-11-15 사용자 결정, sabol.kka 만). reply_drafts 가 켜져 있어야 한다.
+    # 실제로 다는 것은 저장소 Variables REPLY_AUTO_<계정>=true 이고 DRY_RUN 이 꺼졌을 때만. 남의 글에는 달지 않는다 (규칙 6)
+    reply_auto: bool = False
     # 게시물에 이미지·영상을 붙일 수 있는지 (규칙 2, 2026-10-30). 앱 홍보 계정의 자기 앱 캡처·시연 영상용. 쿠팡 계정은 false (media.py)
     allow_media: bool = False
     # 계정이 다루는 것: coupang(쿠팡 파트너스 상품, 기본) 또는 app(내가 만든 앱 홍보, app_posts.py, PLAN 1-2)
@@ -610,6 +613,11 @@ def parse_config(raw) -> Config:
     reply_drafts = raw.get("reply_drafts", Config.reply_drafts)
     if not isinstance(reply_drafts, bool):
         raise ConfigError(f"reply_drafts 는 true/false 여야 합니다: {reply_drafts!r}")
+    reply_auto = raw.get("reply_auto", Config.reply_auto)
+    if not isinstance(reply_auto, bool):
+        raise ConfigError(f"reply_auto 는 true/false 여야 합니다: {reply_auto!r}")
+    if reply_auto and not reply_drafts:
+        raise ConfigError("reply_auto 를 켜려면 reply_drafts 도 true 여야 합니다 (같은 기준으로 고른 초안을 단다)")
     allow_media = raw.get("allow_media", Config.allow_media)
     if not isinstance(allow_media, bool):
         raise ConfigError(f"allow_media 는 true/false 여야 합니다: {allow_media!r}")
@@ -634,6 +642,7 @@ def parse_config(raw) -> Config:
         reply_delay_hours=float(delay),
         ops_advice=ops_advice,
         reply_drafts=reply_drafts,
+        reply_auto=reply_auto,
         allow_media=allow_media,
         content=content,
         lang=lang,

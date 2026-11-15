@@ -6,6 +6,7 @@
   - 운영 알림 (상품 링크 보충·발행 수 늘리기, ops_advice)
   - 오늘 둘러볼 검색어
   - 답글 초안 (config reply_drafts: true 인 계정만, reply_drafts.py. 초안만 보여 주고 올리지 않는다)
+  - 자동 답글 (config reply_auto: true 인 계정만, auto_reply.py. 지난 24시간에 단 것·연습 기록)
   - 내일 발행 예정·오늘 발행 개수, 최근 36시간 보류(held) 개수 (보류는 있을 때만)
   개별 글·사유·post_id·답해 줄 답글은 모니터링 화면(monitor_app.py)에서 본다
 
@@ -102,6 +103,14 @@ def build_digest(store, cfg: Config, now: datetime, *, dry_run: bool, token_issu
         words = [pool[(start + i) % len(pool)] for i in range(3)]
         lines.append("오늘 둘러볼 검색어: " + ", ".join(words) + " — 남의 글 5개에 진심 답글 달기 (10분)")
     lines.append("")
+    if cfg.reply_auto:
+        # 자동으로 단(또는 연습으로 기록한) 답글은 따로 보여 주고, 초안 목록에서는 뺀다 (auto_reply.py, 2026-11-15)
+        import auto_reply
+        auto_lines = auto_reply.section(store, now)
+        if auto_lines:
+            lines += auto_lines + [""]
+        done = auto_reply.logged_ids(store)
+        drafts = [d for d in drafts or [] if d.get("reply_id") not in done]
     if drafts:
         import reply_drafts
         lines += reply_drafts.section(drafts) + [""]
