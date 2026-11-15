@@ -230,7 +230,7 @@ def test_digest_shows_auto_replies_and_drops_them_from_drafts(auto):
     drafts = reply_drafts.make_drafts(store, auto, fake_complete(), NOW)
     text = digest.build_digest(store, auto, NOW + timedelta(hours=1), dry_run=False, drafts=drafts)
     assert "자동 답글 (지난 24시간) 단 것 0개, 연습 2개 (REPLY_AUTO 꺼짐" in text
-    assert "1) [연습] @kim: 저는 건조기 없으면 못 살아요" in text and f"→ {GOOD}" in text
+    assert "1) [연습] @kim: 나는 건조기 없으면 못 살아" in text and f"→ {GOOD}" in text
     assert "답글 초안" not in text                                # 이미 기록한 답글은 초안 목록에서 뺀다
     assert "자동 답글" not in digest.build_digest(store, auto, NOW + timedelta(hours=30), dry_run=False)
 
@@ -240,3 +240,20 @@ def test_digest_without_reply_auto_has_no_auto_section(cfg):
     store.set_state(auto_reply.STATE_KEY, [{"reply_id": "r1", "username": "kim", "draft": GOOD,
                                             "at": NOW.isoformat(), "mode": "posted"}])
     assert "자동 답글" not in digest.build_digest(store, dataclasses.replace(cfg, reply_drafts=True), NOW, dry_run=False)
+
+
+def test_polite_commenter_gets_a_polite_auto_reply(auto):
+    a, b = picked_ids(2)
+    store, api = inbox_store(reply(a, text="결국 유선 큰 걸로 갔어요 ㅠ"), reply(b, user="lee")), FakeApi()
+    polite_draft = "밤새 못 버티는 게 제일 아쉽죠. 짧게 쓰기엔 딱인데요."
+    run(store, auto, api, complete=fake_complete({a: polite_draft}))
+    assert {c["reply_to_id"]: c["text"] for c in api.containers} == {a: polite_draft, b: GOOD}
+
+
+def test_banmal_draft_to_a_polite_commenter_is_not_posted(auto):
+    a = picked_ids(1)[0]
+    store, api = inbox_store(reply(a, text="결국 유선 큰 걸로 갔어요 ㅠ")), FakeApi()
+    run(store, auto, api, complete=fake_complete({a: "밤새 못 버티는 게 제일 아쉽지. 짧게 쓰기엔 딱인데."}))
+    assert api.containers == []
+    with pytest.raises(ValueError, match="반말"):
+        auto_reply.reply_params("밤새 못 버티는 게 제일 아쉽지.", a, auto, polite=True)

@@ -32,7 +32,7 @@ def picked_ids(n, prefix="r"):
     return out
 
 
-def reply(rid, text="저는 건조기 없으면 못 살아요", post_id="p1", hours_ago=2, user="kim"):
+def reply(rid, text="나는 건조기 없으면 못 살아", post_id="p1", hours_ago=2, user="kim"):
     return {"post_id": post_id, "reply_id": rid, "username": user, "text": text,
             "permalink": f"https://www.threads.com/@{user}/post/{rid}", "at": (NOW - timedelta(hours=hours_ago)).isoformat()}
 
@@ -164,7 +164,7 @@ def test_digest_shows_drafts_only_when_given(casual):
     drafts = [{**reply("r1"), "draft": "오 그 정도야? 뭐가 제일 편해"}]
     text = digest.build_digest(store, casual, NOW, dry_run=True, drafts=drafts)
     assert "답글 초안 1개 — 자동으로 달지 않아요" in text
-    assert "1) @kim: 저는 건조기 없으면 못 살아요" in text and "→ 오 그 정도야? 뭐가 제일 편해" in text
+    assert "1) @kim: 나는 건조기 없으면 못 살아" in text and "→ 오 그 정도야? 뭐가 제일 편해" in text
     assert "https://www.threads.com/@kim/post/r1" in text
     assert "답글 초안" not in digest.build_digest(store, casual, NOW, dry_run=True)
 
@@ -174,3 +174,48 @@ def test_only_sabolkka_has_reply_drafts_on_and_digest_workflow_has_the_llm_key()
     assert load_config(PROJECT_ROOT / "config.yaml").reply_drafts is False
     workflow = (Path(PROJECT_ROOT) / ".github" / "workflows" / "digest.yml").read_text(encoding="utf-8")
     assert "GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}" in workflow
+
+
+# ── 존댓말 답글에는 존댓말로 (2026-11-15 사용자 결정) ─────────────────────
+
+@pytest.mark.parametrize("text", ["저는 건조기 없으면 못 살아요", "결국 유선 큰 걸로 갔어요 ㅠ 배터리가 짧아서",
+                                  "부지런한 편 아니면 괜히 샀다 쪽에 한 표요ㅠ", "2번이요", "좋습니다", "써 보셨나요?",
+                                  "이거 괜찮죠"])
+def test_polite_replies_are_detected(text):
+    assert reply_drafts.is_polite(text)
+
+
+@pytest.mark.parametrize("text", ["나는 건조기 없으면 못 살아", "필요 없어 그냥", "요즘 다 이거 쓰더라", "중요 포인트는 필터",
+                                  "우리 집은 다 자동 써 ㅎㅎ 엄청 편해", "ㅋㅋ 인정"])
+def test_casual_replies_are_not_polite(text):
+    assert not reply_drafts.is_polite(text)
+
+
+def test_polite_reply_needs_a_polite_draft_on_a_casual_account(casual):
+    assert reply_drafts.draft_problems("오 그 정도면 편하겠네요", casual, polite=True) == []
+    assert any("반말" in p for p in reply_drafts.draft_problems("오 그 정도야? 뭐가 제일 편해", casual, polite=True))
+    assert any("반말" in p for p in reply_drafts.draft_problems("그렇군요\n뭐가 제일 편해", casual, polite=True))
+    assert any("존댓말" in p for p in reply_drafts.draft_problems("오 그 정도면 편하겠네요", casual))
+
+
+def test_make_drafts_tells_the_llm_which_replies_were_polite(casual):
+    store = MemoryStore()
+    a, b = picked_ids(2)
+    store.set_state("reply_inbox", [reply(a, text="저는 건조기 없으면 못 살아요"), reply(b, user="lee")])
+    seen = []
+
+    def complete(system, user, temperature):
+        items = json.loads(user)["replies"]
+        seen.extend(items)
+        return json.dumps({"drafts": [{"id": r["id"], "text": "그 정도면 진짜 편하겠네요" if r["polite"] else "오 그 정도야? 뭐가 제일 편해"}
+                                      for r in items]}, ensure_ascii=False)
+
+    drafts = {d["reply_id"]: d["draft"] for d in reply_drafts.make_drafts(store, casual, complete, NOW)}
+    assert {r["id"]: r["polite"] for r in seen} == {a: True, b: False}
+    assert drafts == {a: "그 정도면 진짜 편하겠네요", b: "오 그 정도야? 뭐가 제일 편해"}
+
+
+def test_polite_account_always_answers_politely(cfg):
+    polite_cfg = dataclasses.replace(cfg, tone="polite")
+    assert reply_drafts.wants_polite("ㅋㅋ 인정", polite_cfg) is True
+    assert reply_drafts.wants_polite("ㅋㅋ 인정", dataclasses.replace(cfg, tone="casual")) is False

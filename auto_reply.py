@@ -5,7 +5,8 @@
 좋아요(하트)는 스레드 API 에 기능이 없어 하지 않는다.
 
 - 고르는 기준과 초안 검사는 reply_drafts 와 같다 (최근 24시간, 절반쯤, 글 하나에 3개, 하루 6개,
-  비난·항의·가격·건강·안전 답글은 건너뜀, 2줄·80자, 링크·멘션·이모지·금지어·경험 표현·존댓말 없음).
+  비난·항의·가격·건강·안전 답글은 건너뜀, 2줄·80자, 링크·멘션·이모지·금지어·경험 표현 없음,
+  말투는 반말이되 상대가 존댓말로 쓴 답글에는 존댓말 — 2026-11-15 사용자 결정).
 - 여기서 더 좁힌다
   - 답글이 달리고 MIN_AGE_MINUTES 분이 지난 것만 (바로 답하면 봇처럼 보인다)
   - 같은 사람에게는 24시간에 한 번만 (내 답글에 또 답글이 달려도 주고받기가 이어지지 않게)
@@ -75,9 +76,10 @@ def due(drafts: list[dict], entries: list[dict], now: datetime) -> list[dict]:
     return out
 
 
-def reply_params(text: str, reply_id: str, cfg: Config) -> dict:
-    """남의 답글(reply_id)에 다는 글 컨테이너. 초안 검사를 한 번 더 한다 (최종 관문)."""
-    problems = reply_drafts.draft_problems(text, cfg)
+def reply_params(text: str, reply_id: str, cfg: Config, polite: bool = False) -> dict:
+    """남의 답글(reply_id)에 다는 글 컨테이너. 초안 검사를 한 번 더 한다 (최종 관문).
+    polite: 상대가 존댓말로 써서 존댓말로 답해야 하는 답글 (reply_drafts.wants_polite)."""
+    problems = reply_drafts.draft_problems(text, cfg, polite=polite)
     if problems or not reply_id:
         raise ValueError(f"자동 답글 검사 실패: {', '.join(problems) or '답글 ID 없음'}")
     return {"media_type": "TEXT", "text": text.strip(), "reply_to_id": str(reply_id)}
@@ -99,7 +101,7 @@ def run(store, cfg: Config, *, api, complete, now: datetime, live: bool, dry_run
                  "text": d.get("text"), "permalink": d.get("permalink"), "draft": d["draft"],
                  "at": now.isoformat(), "mode": "posted" if real else "practice", "media_id": None}
         try:
-            params = reply_params(d["draft"], d["reply_id"], cfg)
+            params = reply_params(d["draft"], d["reply_id"], cfg, polite=reply_drafts.wants_polite(d.get("text"), cfg))
             if real:
                 entry["media_id"] = publisher.publish_container(api, params, sleep)
                 log.info(f"[자동 답글] @{d.get('username')} 에게 답글: {d['draft']}")

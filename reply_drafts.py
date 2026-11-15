@@ -14,7 +14,7 @@ reply_auto: true 인 계정(2026-11-15, sabol.kka)은 auto_reply.py 가 이 초�
 
 초안 검사 (코드)
   - 2줄·80자 이내, URL·@멘션·이모지 없음, 계정 금지어(가격·경험·안전 표현) 없음
-  - casual 계정은 존댓말로 끝나면 버린다
+  - casual 계정은 존댓말로 끝나면 버린다. 다만 상대가 존댓말로 쓴 답글에는 존댓말로 답하고, 반말로 끝나면 버린다 (2026-11-15)
   검사에서 떨어진 초안은 버린다. AI 검수자(R1~R12)는 거치지 않는다 (자동으로 달 때도 이 코드 검사가 관문이다).
 
 답글 본문은 남이 쓴 글이라 LLM 에 "자료"로만 넘긴다. 결과는 위 검사를 통과한 짧은 문장만 요약에 실린다.
@@ -47,7 +47,10 @@ SKIP_RE = re.compile(r"얼마(?!\s?(안|못|나\s))|가격|최저가|할인|쿠�
                      r"|건강|아토피|알레르기|알러지|병원|부작용|유해|무해|전자파|화재|불\s?나|안전|위험|아기|신생아|임산부")
 # 싸우자는 답글 (자동 정지 단어 말고도 건너뛸 것)
 HOSTILE_RE = re.compile(r"광고(네|냐|임|야|잖|충|글|계정|쟁이)|뒷광고|바이럴|낚시|어그로|차단|꺼져|닥쳐|ㅅㅂ|시발|씨발|병신|지랄")
-POLITE_END_RE = re.compile(r"(요|니다|세요|까요|죠)[\s.!?~ㅎㅋ]*$")
+POLITE_END_RE = re.compile(r"(요|니다|세요|까요|죠)[\s.!?~ㅎㅋㅠㅜ^]*$")
+# 남이 쓴 답글이 존댓말인지 (2026-11-15 사용자 결정: 존댓말 답글에는 존댓말로 답한다).
+# 문장 끝의 "요/니다/죠" 를 찾는다. "필요", "중요", "요즘" 같은 낱말은 빼려고 앞 글자와 뒤 글자를 본다
+POLITE_IN_RE = re.compile(r"(?<![필중수주강동])(요|니다|습니까|세요|까요|죠)(?=[\s.!?~ㅎㅋㅠㅜ^,)]|$)")
 WORD_RE = re.compile(r"[0-9A-Za-z가-힣]")
 
 SYSTEM_PROMPT = """당신은 스레드 계정 운영자입니다. 내 글에 달린 답글에 달 짧은 답을 씁니다.
@@ -66,8 +69,20 @@ SYSTEM_PROMPT = """당신은 스레드 계정 운영자입니다. 내 글에 달
 - 답하기 애매한 답글이면 text 를 빈 문자열로 둡니다.
 
 반드시 JSON 으로만 답합니다: {{"drafts": [{{"id": "...", "text": "..."}}]}}"""
-TONE_RULES = {"casual": "친근한 반말로 씁니다 (\"~야\", \"~지\", \"~네\"). 존댓말(\"~요\", \"~니다\")을 쓰지 않습니다.",
+TONE_RULES = {"casual": "기본은 친근한 반말로 씁니다 (\"~야\", \"~지\", \"~네\"). "
+                        "다만 입력의 polite 가 true 인 답글(상대가 존댓말로 쓴 답글)에는 부드러운 해요체(\"~요\")로 씁니다. "
+                        "polite 가 false 면 존댓말(\"~요\", \"~니다\")을 쓰지 않습니다.",
               "polite": "부드러운 해요체로 씁니다."}
+
+
+def is_polite(text: str) -> bool:
+    """남이 쓴 답글이 존댓말인지. 하나라도 존댓말로 끝나는 문장이 있으면 존댓말로 본다."""
+    return bool(POLITE_IN_RE.search(text or ""))
+
+
+def wants_polite(reply_text: str, cfg: Config) -> bool:
+    """이 답글에 존댓말로 답해야 하는지: 해요체 계정이거나, 상대가 존댓말을 썼을 때."""
+    return cfg.tone != "casual" or is_polite(reply_text)
 
 
 def _picked(reply_id: str) -> bool:
@@ -107,8 +122,9 @@ def select(inbox: list[dict], now: datetime) -> list[dict]:
     return out
 
 
-def draft_problems(text: str, cfg: Config) -> list[str]:
-    """초안이 지켜야 할 것. 빈 목록이면 통과."""
+def draft_problems(text: str, cfg: Config, polite: bool = False) -> list[str]:
+    """초안이 지켜야 할 것. 빈 목록이면 통과.
+    polite: 상대가 존댓말을 써서 존댓말로 답해야 하는 답글 (casual 계정에서만 의미가 있다)."""
     text = (text or "").strip()
     problems = []
     if not text:
@@ -125,7 +141,10 @@ def draft_problems(text: str, cfg: Config) -> list[str]:
     bad = [w for w in tuple(cfg.banned_words) + guard.EXPERIENCE_WORDS if w and w.lower() in text.lower()]
     if bad:
         problems.append("금지어: " + ", ".join(sorted(set(bad))))
-    if cfg.tone == "casual" and any(POLITE_END_RE.search(ln.strip()) for ln in lines):
+    if cfg.tone == "casual" and polite:
+        if not all(POLITE_END_RE.search(ln.strip()) for ln in lines):
+            problems.append("반말 (존댓말 답글에는 존댓말로)")
+    elif cfg.tone == "casual" and any(POLITE_END_RE.search(ln.strip()) for ln in lines):
         problems.append("존댓말")
     return problems
 
@@ -159,7 +178,7 @@ def make_drafts(store, cfg: Config, complete, now: datetime) -> list[dict]:
     todo = [r for r in chosen if r["reply_id"] not in cache]
     if todo:
         payload = [{"id": r["reply_id"], "post": _post_excerpt(store.get_post(r.get("post_id"))),
-                    "reply": (r.get("text") or "")[:120]} for r in todo]
+                    "reply": (r.get("text") or "")[:120], "polite": wants_polite(r.get("text"), cfg)} for r in todo]
         system = SYSTEM_PROMPT.format(tone_rule=TONE_RULES.get(cfg.tone, TONE_RULES["polite"]))
         try:
             answers = _parse(complete(system, json.dumps({"replies": payload}, ensure_ascii=False, indent=1), 0.7))
@@ -168,7 +187,7 @@ def make_drafts(store, cfg: Config, complete, now: datetime) -> list[dict]:
             answers = {}
         for r in todo:
             text = (answers.get(r["reply_id"]) or "").strip()
-            problems = draft_problems(text, cfg)
+            problems = draft_problems(text, cfg, polite=wants_polite(r.get("text"), cfg))
             if problems:
                 log.info(f"[답글 초안] {r['reply_id']} 버림: {', '.join(problems)}")
                 text = ""
