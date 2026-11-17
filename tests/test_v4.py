@@ -67,6 +67,65 @@ def test_talk_topics_are_unique_and_clean(cfg):
         assert not [w for w in cfg.banned_words if w in t], t
 
 
+# 2026-11-17: 제습기 상품 글(11-16) 다음 날 "제습기, 살까 말까" 대화 글이 나갔다 → 최근 3일 상품 글의 물건은 뒤로
+TALK_DAY = date(2026, 11, 17)
+NEAR_PRODUCTS = parse_products([
+    {"product_id": "s13", "name": "신일 제습기 5L-10L 컴팩트 스마트형", "category": "living", "power_w": "",
+     "default_hours": "", "link": "https://link.coupang.com/a/aaa", "note": "제습기"},
+    {"product_id": "s25", "name": "마이디어 미니 냉장고 44L, 화이트", "category": "kitchen", "power_w": "",
+     "default_hours": "", "link": "https://link.coupang.com/a/bbb", "note": "미니 냉장고"},
+])
+NEAR_TOPICS = ("제습기, 살까 말까", "식탁 위 미니 냉장고, 살까 말까")
+
+
+def _pick_post(pid, day, field="scheduled_at"):
+    when = datetime(day.year, day.month, day.day, 13, 12, tzinfo=KST).astimezone(timezone.utc).isoformat()
+    return {"type": "pick", "status": "published", "product_ids": [pid], "calc_payload": {}, field: when}
+
+
+def _talk_picks(used, day=TALK_DAY):
+    return {generator.pick_subject(NEAR_PRODUCTS, "talk", day, used, offset=i, talk_topics=NEAR_TOPICS)["tip_topic"]
+            for i in range(4)}
+
+
+def test_talk_skips_item_of_yesterdays_product_post():
+    assert _talk_picks([_pick_post("s13", TALK_DAY - timedelta(days=1))]) == {"식탁 위 미니 냉장고, 살까 말까"}
+
+
+def test_recent_product_outranks_never_used_topic():
+    """한 번도 안 쓴 제습기 주제라도, 최근 상품 글과 겹치면 이미 쓴 냉장고 주제보다 뒤로 간다."""
+    used = [{"type": "talk", "status": "published", "product_ids": [],
+             "calc_payload": {"talk_topic": NEAR_TOPICS[1]}, "published_at": "2026-11-10T09:00:00+00:00"},
+            _pick_post("s13", TALK_DAY - timedelta(days=2))]
+    assert _talk_picks(used) == {"식탁 위 미니 냉장고, 살까 말까"}
+
+
+def test_product_post_older_than_three_days_is_fine():
+    assert "제습기, 살까 말까" in _talk_picks([_pick_post("s13", TALK_DAY - timedelta(days=4))])
+
+
+def test_same_run_pick_counts_and_published_at_is_used():
+    # 같은 실행에서 먼저 만든 소개 글(다음 날 예약)과, 예약 시각 없이 발행 시각만 있는 글
+    assert _talk_picks([_pick_post("s25", TALK_DAY)]) == {"제습기, 살까 말까"}
+    assert _talk_picks([_pick_post("s25", TALK_DAY - timedelta(days=3), "published_at")]) == {"제습기, 살까 말까"}
+
+
+def test_all_topics_overlapping_still_picks_one():
+    used = [_pick_post("s13", TALK_DAY - timedelta(days=1)), _pick_post("s25", TALK_DAY)]
+    assert _talk_picks(used) <= set(NEAR_TOPICS) and _talk_picks(used)
+
+
+@pytest.mark.parametrize("topic, name, hit", [
+    ("음식물처리기, 살까 말까", "쿠첸 제로핏 음식물 처리기 가정용", True),
+    ("전동 칫솔, 살까 말까", "필립스 소닉케어 3100 시리즈 전동칫솔", True),
+    ("식탁 위 미니 냉장고, 살까 말까", "마이디어 미니 냉장고 44L", True),
+    ("건조기, 살까 말까", "Y형 튼튼한 접이식 빨래 건조대", False),
+    ("안마기, 살까 말까", "신일 제습기 5L-10L", False),
+])
+def test_talk_overlaps(topic, name, hit):
+    assert generator.talk_overlaps(topic, [name]) is hit
+
+
 # ── B. 시즌 모음 ─────────────────────────────────────────────────────────
 
 BUNDLE_BODY = ("빈손으로 가기엔 좀 그럴 때 있죠.\n\n1. F사 원목 냄비받침\n트리 모양 원목 냄비받침이에요.\n\n"

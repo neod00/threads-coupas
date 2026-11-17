@@ -35,7 +35,7 @@ import calculator
 import guard
 from calculator import Tariff
 from products import Product
-from settings import Config, account_path
+from settings import KST, Config, account_path
 
 log = logging.getLogger("threads_coupas")
 
@@ -50,6 +50,7 @@ USED_STATUSES = ("approved", "published")           # 본문에 실제로 쓰인
 MAX_ATTEMPTS = 3            # 최초 1회 + 재생성 2회 (PLAN Step 4)
 TOPIC_TAG_MAX = 50
 RECENT_TEXTS_FOR_GENERATOR = 5   # 생성기에 보여 줄 같은 유형의 최근 글 수
+TALK_PRODUCT_GAP_DAYS = 3        # 상품 글로 나간 물건은 그 뒤 3일 동안 대화 글 주제에서 뒤로 미룬다 (2026-11-17)
 
 TIP_TOPICS = (
     "겨울 전기요금 고지서가 갑자기 뛰는 이유, 누진 구간",
@@ -318,7 +319,8 @@ def subjects(products: Sequence[Product], post_type: str, bundles: Sequence = ()
 def pick_subject(products: Sequence[Product], post_type: str, day: date, used: Sequence[dict] = (),
                  offset: int = 0, bundles: Sequence = (), talk_topics: Sequence[str] = (), gift=None) -> dict:
     """가장 오래 안 쓴 주제를 고른다. used: 실제로 쓰인(approved·published) posts 행, 오래된 것 → 최신 순.
-    한 번도 안 쓴 주제가 먼저고, 그 안에서는 최근에 다룬 상품을 뒤로 미룬다. 동률이면 날짜로 돌린다."""
+    한 번도 안 쓴 주제가 먼저고, 그 안에서는 최근에 다룬 상품을 뒤로 미룬다. 동률이면 날짜로 돌린다.
+    talk 는 최근 3일 안에 상품 글로 나간 물건의 주제를 맨 뒤로 미룬다 (2026-11-17: 제습기 상품 글 다음 날 제습기 대화 글)."""
     candidates = subjects(products, post_type, bundles, day, talk_topics, gift)
     if not candidates:
         raise ValueError(f"{post_type} 에 쓸 주제가 없습니다.")
@@ -329,11 +331,45 @@ def pick_subject(products: Sequence[Product], post_type: str, day: date, used: S
         for pid in post.get("product_ids") or []:
             last_product[pid] = i
 
+    near = recent_product_names(products, used, day) if post_type == "talk" else []
+
     def score(c):
-        return (last_key.get(c["key"], -1), max((last_product.get(p.product_id, -1) for p in c["picked"]), default=-1))
+        return (talk_overlaps(c["tip_topic"], near) if near else False,
+                last_key.get(c["key"], -1), max((last_product.get(p.product_id, -1) for p in c["picked"]), default=-1))
 
     best = min(score(c) for c in candidates)
     return _rotate([c for c in candidates if score(c) == best], day, offset)
+
+
+def _post_day(post: dict) -> date | None:
+    """글이 (나갈·나간) 날의 한국 날짜: 예약 시각 → 발행 시각 → 생성 시각 순."""
+    for field in ("scheduled_at", "published_at", "created_at"):
+        if dt := _as_utc(post.get(field)):
+            return dt.astimezone(KST).date()
+    return None
+
+
+def recent_product_names(products: Sequence[Product], used: Sequence[dict], day: date,
+                         gap_days: int = TALK_PRODUCT_GAP_DAYS) -> list[str]:
+    """day 기준 최근 gap_days 일(그날 포함) 안에 상품 글로 나간(또는 나갈) 상품 이름."""
+    names = {p.product_id: p.name for p in products}
+    out = []
+    for post in used:
+        when = _post_day(post)
+        if when is None or not (day - timedelta(days=gap_days) <= when <= day):
+            continue
+        out += [names[pid] for pid in post.get("product_ids") or [] if pid in names]
+    return out
+
+
+def talk_overlaps(topic: str | None, product_names: Sequence[str]) -> bool:
+    """대화 주제의 물건이 상품 이름에 들어 있나. "식탁 위 미니 냉장고, 살까 말까" → 끝 낱말 "냉장고" 로 본다.
+    띄어쓰기는 무시한다 ("음식물처리기" = "음식물 처리기", "전동 칫솔" → "칫솔" ⊂ "전동칫솔")."""
+    head = (topic or "").split(",")[0].split()
+    if not head:
+        return False
+    word = head[-1]
+    return any(word in name.replace(" ", "") for name in product_names)
 
 
 def _as_utc(value) -> datetime | None:
