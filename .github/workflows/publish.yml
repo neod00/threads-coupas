@@ -66,5 +66,14 @@ jobs:
           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
           REPLY_AUTO: ${{ vars[format('REPLY_AUTO{0}', env.SFX)] }}
         run: |
+          set -o pipefail
           echo "DRY_RUN=${DRY_RUN}"
-          python publisher.py
+          python publisher.py 2>&1 | tee run.log
+      # 2026-11-18: 발행 단계가 멈추면 텔레그램으로 알린다 (생성과 같은 notify_failure.py). 실제 발행일 때만 알린다
+      - name: Alert on failure
+        if: failure() && env.DRY_RUN != 'true'
+        env:
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: python notify_failure.py --job 발행 --log run.log --url "${RUN_URL}" --note "예약된 글이 나가지 않았을 수 있어요. 기록을 확인해 주세요."

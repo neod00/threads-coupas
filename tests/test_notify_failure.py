@@ -67,3 +67,16 @@ def test_generate_workflow_alerts_on_failure_but_not_on_dry_run():
     assert alert["if"].startswith("failure()") and "inputs.dry_run != true" in alert["if"]
     assert "notify_failure.py" in alert["run"] and "--log run.log" in alert["run"]
     assert set(alert["env"]) == {"TELEGRAM_BOT_TOKEN", "TELEGRAM_CHAT_ID", "RUN_URL"}
+
+
+def test_publish_workflow_alerts_on_failure_only_when_really_publishing():
+    job = yaml.safe_load((PROJECT_ROOT / ".github/workflows/publish.yml").read_text(encoding="utf-8"))["jobs"]["publish"]
+    steps = job["steps"]
+    pub = next(s for s in steps if s.get("name") == "Publish one due post")
+    # GitHub 기본 셸은 pipefail 이 꺼져 있어, 없으면 tee 가 발행 실패를 성공으로 덮는다
+    assert "set -o pipefail" in pub["run"] and "python publisher.py 2>&1 | tee run.log" in pub["run"]
+    alert = next(s for s in steps if s.get("name") == "Alert on failure")
+    assert steps.index(alert) > steps.index(pub)
+    assert alert["if"] == "failure() && env.DRY_RUN != 'true'" and "DRY_RUN" in job["env"]
+    assert "--job 발행" in alert["run"] and "--log run.log" in alert["run"]
+    assert set(alert["env"]) == {"TELEGRAM_BOT_TOKEN", "TELEGRAM_CHAT_ID", "RUN_URL"}
