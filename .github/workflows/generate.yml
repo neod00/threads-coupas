@@ -72,4 +72,12 @@ jobs:
             args+=(--dry-run)
           fi
           echo "실행: python pipeline.py ${args[*]}"
-          python pipeline.py "${args[@]}"
+          python pipeline.py "${args[@]}" 2>&1 | tee run.log
+      # 2026-11-18: 생성이 실패하면 텔레그램으로 알린다 (11-17 sabol.kka 생성이 조용히 멈춰 하루 글이 빠졌다). dry_run 은 알리지 않는다
+      - name: Alert on failure
+        if: failure() && inputs.dry_run != true && inputs.dry_run != 'true'
+        env:
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: python notify_failure.py --job 생성 --log run.log --url "${RUN_URL}" --note "다음 날 글이 비어 있을 수 있어요. 기록을 확인해 주세요."

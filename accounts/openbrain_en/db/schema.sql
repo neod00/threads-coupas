@@ -8,7 +8,7 @@ set search_path to openbrain_en;
 
 create table if not exists posts (
   id               uuid primary key,
-  type             text not null check (type in ('calc', 'compare', 'pick', 'bundle', 'talk', 'tip', 'launch', 'feature', 'devlog', 'ask')),
+  type             text not null check (type in ('calc', 'compare', 'pick', 'bundle', 'talk', 'tip', 'gift', 'launch', 'feature', 'devlog', 'ask')),
   product_ids      text[] not null default '{}',
   text             text not null,
   reply_text       text,

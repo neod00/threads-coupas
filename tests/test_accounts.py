@@ -114,6 +114,28 @@ def test_open_store_passes_account_as_schema(monkeypatch):
     assert seen["schema"] is None
 
 
+def _type_check(sql):
+    import re
+    """schema.sql 의 type 칸 제약, 또는 migrate_*.sql 의 마지막 posts_type_check 가 허용하는 유형."""
+    lists = (re.findall(r"type\s+text not null check \(type in \(([^)]*)\)\)", sql)
+             or re.findall(r"posts_type_check\s+check \(type in \(([^)]*)\)\)", sql))
+    return set(re.findall(r"'(\w+)'", lists[-1])) if lists else set()
+
+
+def test_every_post_type_is_allowed_by_the_db():
+    """2026-11-17: gift 유형을 코드에만 넣어 sabol.kka 생성이 posts_type_check 위반으로 멈췄다.
+    코드가 만들 수 있는 유형은 schema.sql 과 가장 최근 migrate_*.sql 의 제약에 모두 있어야 한다."""
+    import generator
+    kinds = set(generator.POST_TYPES) | set(generator.APP_TYPES)
+    for f in ("db/schema.sql", "accounts/sabolkka/db/schema.sql", "accounts/openbrain_en/db/schema.sql"):
+        assert kinds <= _type_check((ROOT / f).read_text(encoding="utf-8")), f
+    latest = max((ROOT / "db").glob("migrate_v*.sql"), key=lambda f: int(f.stem.removeprefix("migrate_v")))
+    sql = latest.read_text(encoding="utf-8")
+    assert kinds <= _type_check(sql), latest.name
+    for schema in ("public", "sabolkka", "openbrain_en"):
+        assert f"alter table {schema}.posts add constraint posts_type_check" in sql, schema
+
+
 def test_sabolkka_schema_sql_matches_base_schema():
     """sabolkka 스키마는 db/schema.sql 과 같은 테이블·제약을 sabolkka 스키마에 만든다 (한쪽만 고치면 어긋난다)."""
     base = (ROOT / "db" / "schema.sql").read_text(encoding="utf-8")
