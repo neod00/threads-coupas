@@ -175,16 +175,24 @@ def run_generate(store, cfg: Config, tariff, products, *, complete, review_call,
     return {"action": "generated", "posts": made}
 
 
-def short_talk_due(cfg: Config, day, day_posts) -> bool:
-    """길이 실험 (2026-11-22): 그날 대화 글 중 하나만 짧게 만든다. day_posts: 그날 자리를 잡은 글.
-    그날 이미 자리 잡은 대화 글 수가 (날짜 % 대화 자리 수) 와 같을 때 → 실험 글의 자리가 날마다 돈다."""
+def talk_experiment(cfg: Config, day, day_posts) -> str | None:
+    """다음에 만들 대화 글의 실험 종류: None(보통 글), "short"(길이 실험), "short_reply"(댓글 실험).
+    day_posts: 그날 자리를 잡은 글. 그날 대화 글 자리 p 에는 종류 목록[(p - 날짜) % 자리 수] 가 온다 → 종류마다
+    자리가 날마다 돈다 (2026-11-22). 같은 종류는 그날 한 번만."""
     if not cfg.short_talk_max_chars or (cfg.short_talk_until is not None and day > cfg.short_talk_until):
-        return False
+        return None
+    kinds = [generator.SHORT_EXPERIMENT] + ([generator.REPLY_EXPERIMENT] if cfg.short_talk_reply else [])
     talks = [p for p in day_posts if p.get("type") == "talk"]
-    if any((p.get("calc_payload") or {}).get("experiment") == generator.SHORT_EXPERIMENT for p in talks):
-        return False
     talk_slots = max(1, min(cfg.max_posts_per_day, len(cfg.slots_kst)) - rules.max_link_posts_per_day(cfg))
-    return len(talks) == day.toordinal() % talk_slots
+    k = (len(talks) - day.toordinal()) % talk_slots
+    kind = kinds[k] if k < len(kinds) else None
+    if kind and any((p.get("calc_payload") or {}).get("experiment") == kind for p in talks):
+        return None
+    return kind
+
+
+def short_talk_due(cfg: Config, day, day_posts) -> bool:
+    return talk_experiment(cfg, day, day_posts) == generator.SHORT_EXPERIMENT
 
 
 def _day_posts(posts, day) -> list:
@@ -229,12 +237,14 @@ def _generate_one(post_type, i, *, products, tariff, cfg, complete, variant, use
     common = dict(variant=variant, tip_topic=topic, checks=[check], history=history + made, now=now,
                   hours=subject["hours"], recent_texts=same_type, bundle=bundle,
                   gift=gift if post_type == "gift" else None)
-    if post_type == "talk" and short_talk_due(cfg, tomorrow, _day_posts(occupying + made, tomorrow)):
-        post = generator.generate_post(post_type, picked, tariff, cfg, complete, max_chars=cfg.short_talk_max_chars, **common)
+    kind = talk_experiment(cfg, tomorrow, _day_posts(occupying + made, tomorrow)) if post_type == "talk" else None
+    if kind:
+        post = generator.generate_post(post_type, picked, tariff, cfg, complete, max_chars=cfg.short_talk_max_chars,
+                                       self_reply=kind == generator.REPLY_EXPERIMENT, **common)
         if post["status"] != "held" or not generator.too_long_only(post):
             return _schedule(post, used, cfg, occupying, made, day_start, tomorrow)
-        # 끝내 글자 수를 못 맞춘 글은 버리고 보통 길이로 다시 만든다 (실험 때문에 자리를 비우지 않는다)
-        log.warning(f"[생성] 길이 실험 글이 {cfg.short_talk_max_chars}자를 못 맞춰 보통 글로 다시 만듭니다")
+        # 끝내 실험 조건(글자 수·답글)을 못 맞춘 글은 버리고 보통 글로 다시 만든다 (실험 때문에 자리를 비우지 않는다)
+        log.warning(f"[생성] {kind} 실험 글이 조건을 못 맞춰 보통 글로 다시 만듭니다")
     post = generator.generate_post(post_type, picked, tariff, cfg, complete, **common)
     return _schedule(post, used, cfg, occupying, made, day_start, tomorrow)
 

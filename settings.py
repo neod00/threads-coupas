@@ -414,6 +414,9 @@ class Config:
     # short_talk_until(KST 발행 날짜)까지만 한다. 표시는 calc_payload.experiment = "short"
     short_talk_max_chars: int | None = None
     short_talk_until: date | None = None
+    # 댓글 실험 (2026-11-22 사용자 결정): 길이 실험 글과 별도로 하루 대화 글 하나를 짧게 쓰고, 본문에서 뺀 걸리는 점을
+    # 본문 직후 내 첫 답글로 단다 (링크 없음). short_talk_max_chars 가 있어야 한다. 표시는 experiment = "short_reply"
+    short_talk_reply: bool = False
     # 게시물에 이미지·영상을 붙일 수 있는지 (규칙 2, 2026-10-30). 앱 홍보 계정의 자기 앱 캡처·시연 영상용. 쿠팡 계정은 false (media.py)
     allow_media: bool = False
     # 계정이 다루는 것: coupang(쿠팡 파트너스 상품, 기본) 또는 app(내가 만든 앱 홍보, app_posts.py, PLAN 1-2)
@@ -628,6 +631,11 @@ def parse_config(raw) -> Config:
         raise ConfigError(f"short_talk_max_chars 는 60~{limits.max_body_chars} 사이 정수여야 합니다: {short_max!r}")
     if short_until is not None:
         short_until = _parse_date(short_until, "short_talk_until")
+    short_reply = raw.get("short_talk_reply", Config.short_talk_reply)
+    if not isinstance(short_reply, bool):
+        raise ConfigError(f"short_talk_reply 는 true/false 여야 합니다: {short_reply!r}")
+    if short_reply and short_max is None:
+        raise ConfigError("short_talk_reply 를 켜려면 short_talk_max_chars 도 있어야 합니다 (답글 실험 글도 짧게 쓴다)")
     allow_media = raw.get("allow_media", Config.allow_media)
     if not isinstance(allow_media, bool):
         raise ConfigError(f"allow_media 는 true/false 여야 합니다: {allow_media!r}")
@@ -655,6 +663,7 @@ def parse_config(raw) -> Config:
         reply_auto=reply_auto,
         short_talk_max_chars=short_max,
         short_talk_until=short_until,
+        short_talk_reply=short_reply,
         allow_media=allow_media,
         content=content,
         lang=lang,

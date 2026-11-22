@@ -369,8 +369,9 @@ def publish_post(post: dict, *, store, cfg: Config, api, link_checker, notifier,
         store.log_event("published", {"post_id": post["id"], "threads_media_id": media_id})
         autostop.record_publish_result(store, notifier, True)
 
-    if cfg.reply_delay_hours > 0 and not dry_run:
+    if cfg.reply_delay_hours > 0 and not dry_run and not is_self_reply(post):
         # 링크 답글은 run_once 의 재시도 단계가 reply_delay_hours 뒤에 달아 준다 (본문은 이미 published)
+        # 댓글 실험 글의 내 첫 답글은 기다리지 않고 본문 직후에 단다
         log.info(f"[발행] 링크 답글은 {cfg.reply_delay_hours:g}시간 뒤에 답니다")
         reply = None
     else:
@@ -383,6 +384,12 @@ def publish_post(post: dict, *, store, cfg: Config, api, link_checker, notifier,
 REPLY_DUE_GRACE = timedelta(minutes=15)
 
 
+def is_self_reply(post: dict) -> bool:
+    """댓글 실험 글 (2026-11-22): 링크 없는 대화 글에 본문 직후 내 첫 답글을 단다."""
+    return (post.get("type") == "talk" and not post.get("has_link") and not post.get("link_url")
+            and bool(post.get("reply_text")) and (post.get("calc_payload") or {}).get("experiment") == "short_reply")
+
+
 def reply_due(post: dict, cfg: Config, now: datetime) -> bool:
     """링크 답글을 달 때가 됐는지. cfg.reply_delay_hours 가 0 이면 항상 True (본문 직후)."""
     if cfg.reply_delay_hours <= 0 or not post.get("published_at"):
@@ -391,8 +398,9 @@ def reply_due(post: dict, cfg: Config, now: datetime) -> bool:
 
 
 def publish_reply(post: dict, *, store, api, notifier, dry_run: bool, sleep=time.sleep) -> str | None:
-    """link_in_reply 글의 링크 답글. 실패해도 본문은 published 로 두고 다음 실행에서 답글만 재시도한다."""
-    if post.get("variant") != "link_in_reply" or post.get("threads_reply_id"):
+    """link_in_reply 글의 링크 답글, 또는 댓글 실험 글의 내 첫 답글(링크 없음).
+    실패해도 본문은 published 로 두고 다음 실행에서 답글만 재시도한다."""
+    if (post.get("variant") != "link_in_reply" and not is_self_reply(post)) or post.get("threads_reply_id"):
         return None
     try:
         reply_id = publish_container(api, container_params(post, reply_to_id=post["threads_media_id"]), sleep,
@@ -467,8 +475,8 @@ def run_once(store, cfg: Config, *, env=None, api, link_checker, notifier, now: 
 
     # 답글만 실패했던 글: 답글만 재시도
     for post in store.list_posts(["published"]):
-        if (post.get("variant") == "link_in_reply" and post.get("threads_media_id") and not post.get("threads_reply_id")
-                and reply_due(post, cfg, now)):
+        if (post.get("threads_media_id") and not post.get("threads_reply_id")
+                and ((post.get("variant") == "link_in_reply" and reply_due(post, cfg, now)) or is_self_reply(post))):
             publish_reply(post, store=store, api=api, notifier=notifier, dry_run=dry_run, sleep=sleep)
 
     approved = [p for p in store.list_posts(["approved"]) if rules.post_time(p) and rules.post_time(p) <= now]
