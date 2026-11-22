@@ -211,9 +211,9 @@ def _generate_one(post_type, i, *, products, tariff, cfg, complete, variant, use
         subject = app_posts.pick_subject(apps, post_type, tomorrow, used, offset=i)
         if subject is None:
             return None
-        app_subject = {"payload": app_posts.build_payload(subject, post_type), "link": subject["app"].link,
+        app_subject = {"payload": app_posts.build_payload(subject, post_type), "link": app_posts.subject_link(subject),
                        "media": app_posts.pick_media(subject, post_type, used, cfg), "app_id": subject["app"].id}
-        check = reviewer_mod.make_check(rev, app_posts.review_rows(subject["app"]),
+        check = reviewer_mod.make_check(rev, app_posts.review_rows(subject["app"], app_posts.subject_link(subject)),
                                         newest_first[:reviewer_mod.RECENT_POSTS_LIMIT])
         post = generator.generate_post(post_type, [], tariff, cfg, complete, variant=variant, checks=[check],
                                        history=history + made, now=now, recent_texts=same_type,

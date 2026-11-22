@@ -179,6 +179,45 @@ def test_two_apps_take_turns(apps, app_cfg):
     assert used[-4]["calc_payload"]["subject"] != "feature|demo-pdf|edit-text"     # 그 앱 안에서는 안 쓴 기능부터
 
 
+def with_uses(raw_app, **feature_fields):
+    raw = copy.deepcopy(raw_app)
+    raw["info"]["features"][0].update(feature_fields)
+    return (app_posts.parse_app(raw),)
+
+
+def test_feature_link_and_angle_rotate(raw_app):
+    # 2026-11-22: 기능 페이지 링크가 있으면 그 주소로, uses 가 있으면 쓸 때마다 show → use → show … (uses 는 하나씩 돌려 쓴다)
+    apps = with_uses(raw_app, link="https://pdfmonster.xyz/edit-pdf/", uses=["오타 하나 고칠 때", "금액 한 줄 고칠 때"])
+    f = apps[0].features[0]
+    key = f"feature|demo-pdf|{f.id}"
+    seen = []
+    for n in range(4):
+        subject = {"key": key, "app": apps[0], "feature": f, "times_used": n}
+        payload = app_posts.build_payload(subject, "feature")
+        seen.append((payload["angle"], payload["feature"].get("use")))
+        assert app_posts.subject_link(subject) == "https://pdfmonster.xyz/edit-pdf/"
+    assert seen == [("show", None), ("use", "오타 하나 고칠 때"), ("show", None), ("use", "금액 한 줄 고칠 때")]
+    other = {"key": "x", "app": apps[0], "feature": apps[0].features[1]}
+    assert app_posts.subject_link(other) == apps[0].link                       # 링크가 없는 기능은 앱 주소
+    assert "angle" not in app_posts.build_payload(other, "feature")           # uses 가 없으면 payload 는 예전 그대로
+    assert app_posts.review_rows(apps[0], "https://pdfmonster.xyz/edit-pdf/")[0]["link"] == "https://pdfmonster.xyz/edit-pdf/"
+
+
+def test_pick_subject_counts_times_used(raw_app):
+    apps = with_uses(raw_app, uses=["오타 하나 고칠 때"])
+    used = [used_post("launch", "launch|demo-pdf")]
+    first = app_posts.pick_subject(apps, "feature", TOMORROW, used)
+    assert first["times_used"] == 0
+    used += [used_post("feature", s["key"]) for s in app_posts.subjects(apps, "feature", used)]
+    again = app_posts.pick_subject(apps, "feature", TOMORROW, used)
+    assert again["times_used"] == 1
+
+
+def test_feature_link_must_be_my_app(raw_app):
+    with pytest.raises(app_posts.AppInfoError, match="features.link"):
+        with_uses(raw_app, link="https://other.example/edit")
+
+
 def test_devlog_uses_each_update_once(apps):
     first = app_posts.pick_subject(apps, "devlog", TOMORROW, [])
     second = app_posts.pick_subject(apps, "devlog", TOMORROW, [used_post("devlog", first["key"])])

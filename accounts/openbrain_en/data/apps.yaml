@@ -28,32 +28,68 @@ apps:
         - I brought over the features I used in paid PDF editors one by one, and I plan to keep updating it
       link: https://pdfmonster.xyz/en/
       launch_media: [edit-text-demo, edit-text, search]
+      # 2026-11-22 조회수 분석: 사진 없는 글은 조회수가 0~2 였다 → 기능마다 캡처(media)를 붙인다.
+      # link = 그 기능의 페이지 (답글 링크가 날마다 같지 않게). uses = 이 기능을 쓰는 상황 (사람이 확인하고 고친다.
+      # 지어낸 경험담이 아니라 '이럴 때 쓴다'는 예시다). uses 가 있으면 기능 글이 '무엇을 하나' ↔ '언제 쓰나' 를 번갈아 쓴다
       features:
         - id: edit-text
           name: Edit text
           desc: Tap a line in the PDF and change the text right there. Edits match the original font, weight and spacing
           media: edit-text
           clip: edit-text-demo
+          link: https://pdfmonster.xyz/en/edit-pdf/
+          uses:
+            - fixing a typo in a name or a date on a form that was already exported to PDF
+            - correcting one wrong amount on a quote before sending it
         - id: redact
           name: Find and redact personal data
           desc: Automatically finds phone numbers, ID numbers, emails, card numbers and account-like numbers and redacts them in one go. Redacted text is actually removed when you save
-          media: search
+          media: redact
           clip: edit-text-demo
+          link: https://pdfmonster.xyz/en/redact-pdf/
+          uses:
+            - sending a statement as proof of address with the account number removed
+            - sharing a contract after taking out the phone numbers and emails
         - id: sign
           name: Add a signature
           desc: Draw your signature or type your name to make one and place it on the PDF. Signatures are saved only in your browser
+          media: sign
+          link: https://pdfmonster.xyz/en/sign-pdf/
+          uses:
+            - signing a lease or an offer letter without printing and scanning it
+            - signing a permission slip from a phone
         - id: merge-split
           name: Merge and split
           desc: Combine several PDFs into one, pull out the pages you need, or split a PDF into several files
+          media: split
+          link: https://pdfmonster.xyz/en/split-pdf/
+          uses:
+            - pulling out only the pages someone asked for from a long scan
+            - combining several receipts into one PDF for an expense report
         - id: compress
           name: Compress
           desc: Shrinks the images inside a PDF to make the file smaller
+          media: compress
+          link: https://pdfmonster.xyz/en/compress-pdf/
+          uses:
+            - a PDF that is over an email attachment limit
+            - a scanned document that an upload form rejects for being too large
         - id: annotate
           name: Text, shapes and highlighter
           desc: Add text boxes, shapes such as rectangles and arrows, a pen and a highlighter on top of the PDF
+          media: annotate
+          link: https://pdfmonster.xyz/en/annotate-pdf/
+          uses:
+            - marking up a draft with notes and arrows before sending it back
+            - highlighting the lines that matter in a long contract
         - id: stamp
           name: Watermarks and page numbers
           desc: Add a watermark such as Confidential or Copy, and add page numbers
+          media: watermark
+          link: https://pdfmonster.xyz/en/watermark-pdf/
+          uses:
+            - marking a draft as Confidential before sharing it
+            - numbering the pages of a document before printing it
       updates: []
     shots:
       - id: home
@@ -67,8 +103,7 @@ apps:
           - goto: /
           - upload: {selector: "#fileInput", file: sample-en.pdf}
           - wait_for: '[aria-label^="Edit line"]'
-          # 두 쪽 이상인 PDF 는 쪽 목록이 열린 채 시작해서 휴대폰 너비에서는 본문을 덮는다. 닫고 찍는다
-          - click: "#btnThumbs"
+          # 휴대폰 너비에서는 쪽 목록이 닫힌 채 시작한다 (2026-11-22 확인). #btnThumbs 는 누르지 않는다
           - wait: 1500
       - id: edit-text
         feature: Edit text — fix the text in a PDF right where it is
@@ -76,8 +111,6 @@ apps:
           - goto: /
           - upload: {selector: "#fileInput", file: sample-en.pdf}
           - wait_for: '[aria-label="Edit line: 3. Quoted amount: $1,250.00 (excluding tax)"]'
-          - click: "#btnThumbs"
-          - wait: 400
           - click: '[aria-label="Edit line: 3. Quoted amount: $1,250.00 (excluding tax)"]'
           - wait: 800
           - press: End
@@ -90,10 +123,77 @@ apps:
           - goto: /
           - upload: {selector: "#fileInput", file: sample-en.pdf}
           - wait_for: '[aria-label^="Edit line"]'
-          - click: "#btnThumbs"
-          - wait: 400
           - click: "#btnSearch"
           - wait: 1200
+      - id: redact
+        feature: Find and redact — phone numbers and emails found automatically, ready to redact
+        steps:
+          - goto: /
+          - upload: {selector: "#fileInput", file: sample-en.pdf}
+          - wait_for: '[aria-label^="Edit line"]'
+          - click: "#btnSearch"
+          - wait: 600
+          - click: 'label.chip:has-text("Phone numbers")'
+          - click: 'label.chip:has-text("Emails")'
+          - click: "#searchRun"
+          - wait: 1500
+      - id: sign
+        feature: Signature — type your name or draw to make a signature
+        steps:
+          - goto: /
+          - upload: {selector: "#fileInput", file: sample-en.pdf}
+          - wait_for: '[aria-label^="Edit line"]'
+          - click: "#btnSign"
+          - wait: 500
+          - click: '#dlgSign button:has-text("Type")'
+          - click: "#signText"
+          - type: Alex Kim
+          - wait: 1000
+      - id: split
+        feature: Extract and split — save only the pages you need as a new PDF
+        steps:
+          - goto: /
+          - upload: {selector: "#fileInput", file: sample-en.pdf}
+          - wait_for: '[aria-label^="Edit line"]'
+          # 추출·나누기 버튼은 쪽 목록 안에 있다. 쪽 목록을 먼저 연다
+          - click: "#btnThumbs"
+          - wait: 400
+          - click: "#btnSplit"
+          - wait: 500
+          - click: "#splitRanges"
+          - type: "1"
+          - wait: 800
+      - id: compress
+        feature: Compress — shrink the images inside a PDF, three levels
+        steps:
+          - goto: /
+          - upload: {selector: "#fileInput", file: sample-en.pdf}
+          - wait_for: '[aria-label^="Edit line"]'
+          - click: "#btnCompress"
+          - wait: 1000
+      - id: annotate
+        feature: Annotate — a text note added on top of the PDF
+        steps:
+          - goto: /
+          - upload: {selector: "#fileInput", file: sample-en.pdf}
+          - wait_for: '[aria-label^="Edit line"]'
+          - click: 'button[title^="Add text"]'
+          - wait: 300
+          - click: "#drawLayer"
+          - wait: 400
+          - type: Reviewed, looks good
+          - wait: 800
+      - id: watermark
+        feature: Watermark — Confidential stamped across the page
+        steps:
+          - goto: /
+          - upload: {selector: "#fileInput", file: sample-en.pdf}
+          - wait_for: '[aria-label^="Edit line"]'
+          - click: "#btnWatermark"
+          - wait: 500
+          - click: "#stampGo"
+          # 알림이 사라질 때까지 기다린다
+          - wait: 7000
     clips:
       - id: edit-text-demo
         feature: Demo of editing text and redacting a name — changing an amount in a notice, then finding and redacting a name
@@ -102,7 +202,6 @@ apps:
           - goto: /
           - upload: {selector: "#fileInput", file: sample-en.pdf}
           - wait_for: '[aria-label="Edit line: 3. Quoted amount: $1,250.00 (excluding tax)"]'
-          - click: "#btnThumbs"
           - wait: 500
         steps:
           # Scene 1: hook (first frame = preview image)

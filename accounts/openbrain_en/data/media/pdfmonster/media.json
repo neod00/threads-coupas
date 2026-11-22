@@ -3,30 +3,66 @@
     "file": "pdfmonster/home.png",
     "kind": "image",
     "feature": "Home — a free PDF editor that never uploads your file",
-    "captured_at": "2026-11-07T08:30:48+00:00"
+    "captured_at": "2026-11-22T06:44:56+00:00"
   },
   "editor": {
     "file": "pdfmonster/editor.png",
     "kind": "image",
     "feature": "The editor with a PDF open — edit text, shapes, signature and redact tools",
-    "captured_at": "2026-11-07T08:33:08+00:00"
+    "captured_at": "2026-11-22T06:44:56+00:00"
   },
   "search": {
     "file": "pdfmonster/search.png",
     "kind": "image",
     "feature": "Find — search text and automatically find personal data to redact",
-    "captured_at": "2026-11-07T08:33:08+00:00"
+    "captured_at": "2026-11-22T06:44:56+00:00"
   },
   "edit-text": {
     "file": "pdfmonster/edit-text.png",
     "kind": "image",
     "feature": "Edit text — fix the text in a PDF right where it is",
-    "captured_at": "2026-11-07T08:33:08+00:00"
+    "captured_at": "2026-11-22T06:44:56+00:00"
   },
   "edit-text-demo": {
     "file": "pdfmonster/edit-text-demo.mp4",
     "kind": "video",
     "feature": "Demo of editing text and redacting a name — changing an amount in a notice, then finding and redacting a name",
-    "captured_at": "2026-11-07T08:33:08+00:00"
+    "captured_at": "2026-11-22T06:44:56+00:00"
+  },
+  "sign": {
+    "file": "pdfmonster/sign.png",
+    "kind": "image",
+    "feature": "Signature — type your name or draw to make a signature",
+    "captured_at": "2026-11-22T06:44:56+00:00"
+  },
+  "compress": {
+    "file": "pdfmonster/compress.png",
+    "kind": "image",
+    "feature": "Compress — shrink the images inside a PDF, three levels",
+    "captured_at": "2026-11-22T06:44:56+00:00"
+  },
+  "annotate": {
+    "file": "pdfmonster/annotate.png",
+    "kind": "image",
+    "feature": "Annotate — a text note added on top of the PDF",
+    "captured_at": "2026-11-22T06:44:56+00:00"
+  },
+  "watermark": {
+    "file": "pdfmonster/watermark.png",
+    "kind": "image",
+    "feature": "Watermark — Confidential stamped across the page",
+    "captured_at": "2026-11-22T06:44:56+00:00"
+  },
+  "redact": {
+    "file": "pdfmonster/redact.png",
+    "kind": "image",
+    "feature": "Find and redact — phone numbers and emails found automatically, ready to redact",
+    "captured_at": "2026-11-22T06:47:59+00:00"
+  },
+  "split": {
+    "file": "pdfmonster/split.png",
+    "kind": "image",
+    "feature": "Extract and split — save only the pages you need as a new PDF",
+    "captured_at": "2026-11-22T06:48:07+00:00"
   }
 }

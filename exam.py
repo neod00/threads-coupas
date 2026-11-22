@@ -63,7 +63,8 @@ def build_app_case(case: dict, data: dict, cfg: Config) -> tuple[dict, list[dict
     apps = {a.id: a for a in (app_posts.parse_app(item) for item in data["apps"])}
     app = apps[case["app"]]
     post_type, key = case["type"], case.get("subject")
-    subject = {"key": f"{post_type}|{app.id}", "app": app}
+    # times_used: 이 주제를 몇 번 썼다고 볼지 (기능 글의 각도 show/use 를 고른다, app_posts.feature_angle)
+    subject = {"key": f"{post_type}|{app.id}", "app": app, "times_used": case.get("times_used", 0)}
     if post_type == "feature":
         subject.update(key=f"feature|{app.id}|{key}", feature=next(f for f in app.features if f.id == key))
     elif post_type == "devlog":

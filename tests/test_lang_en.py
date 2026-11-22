@@ -155,7 +155,9 @@ def test_en_exam_cases_build_and_are_balanced():
     cfg = en_cfg()
     data = exam.load_cases(exam.APP_EN_CASES_PATH)
     expects = [c["expect"] for c in data["cases"]]
-    assert expects.count("block") == 20 and expects.count("pass") == 10
+    assert expects.count("block") == 21 and expects.count("pass") == 11      # 2026-11-22 쓰임새(use) 각도 케이스 2개 추가
+    use_cases = [c for c in data["cases"] if c.get("times_used")]
+    assert {exam.build_case(c, data, cfg)[0]["calc_payload"]["angle"] for c in use_cases} == {"use"}
     for case in data["cases"]:
         post, rows, recent = exam.build_case(case, data, cfg)
         assert post["text"] and rows
@@ -182,3 +184,17 @@ def test_en_app_data_has_no_korean():
     assert not guard.HANGUL_RE.search(body)
     for name in ("app_base.md", "tpl_launch.md", "tpl_feature.md", "tpl_devlog.md"):
         assert not guard.HANGUL_RE.search((EN_DIR / "prompts" / name).read_text(encoding="utf-8")), name
+
+
+def test_en_every_feature_has_screenshot_link_and_uses():
+    # 2026-11-22 조회수 분석: 사진 없는 글은 조회수가 0~2 였다. 기능마다 캡처·기능 페이지 링크·쓰임새가 있어야 한다
+    import json
+
+    import app_posts
+    app = app_posts.load_apps(EN_DIR / "data" / "apps.yaml")[0]
+    index = json.loads((EN_DIR / "data" / "media" / app.id / "media.json").read_text(encoding="utf-8"))
+    for f in app.features:
+        assert f.media in index and (EN_DIR / "data" / "media" / index[f.media]["file"]).is_file(), f.id
+        assert f.link and f.link.startswith("https://pdfmonster.xyz/en/") and f.link != app.link, f.id
+        assert len(f.uses) >= 2, f.id
+    assert len({f.link for f in app.features}) == len(app.features)

@@ -46,6 +46,8 @@ class Feature:
     desc: str
     media: str | None = None        # media.json 의 그림 id
     clip: str | None = None         # media.json 의 영상 id
+    link: str | None = None         # 이 기능의 페이지 (없으면 앱 링크). 답글 링크가 날마다 같지 않게 (2026-11-22)
+    uses: tuple[str, ...] = ()      # 이 기능을 쓰는 상황 (사람이 적음). 있으면 기능 글이 '무엇을 하나' ↔ '언제 쓰나' 를 번갈아 쓴다
 
 
 @dataclass(frozen=True)
@@ -116,10 +118,18 @@ def parse_app(item: dict) -> AppInfo | None:
 
     features, ids = [], set()
     for f in info["features"] or []:
-        if not isinstance(f, dict) or set(f) - {"id", "name", "desc", "media", "clip"} or not {"id", "name", "desc"} <= set(f):
-            raise AppInfoError(f"{where}.features: id, name, desc (와 선택 media, clip) 이어야 합니다: {f!r}")
+        if not isinstance(f, dict) or set(f) - {"id", "name", "desc", "media", "clip", "link", "uses"} \
+                or not {"id", "name", "desc"} <= set(f):
+            raise AppInfoError(f"{where}.features: id, name, desc (와 선택 media, clip, link, uses) 이어야 합니다: {f!r}")
+        f_link = f.get("link")
+        if f_link is not None:
+            parsed = urlparse(str(f_link))
+            if parsed.scheme != "https" or (parsed.hostname or "").lower() not in hosts:
+                raise AppInfoError(f"{where}.features.link: 이 앱 주소({', '.join(sorted(hosts))})의 https 주소여야 합니다: {f_link!r}")
         features.append(Feature(_id(f["id"], ids, f"{where}.features"), _text(f["name"], f"{where}.features.name", 30),
-                                _text(f["desc"], f"{where}.features.desc", 200), f.get("media"), f.get("clip")))
+                                _text(f["desc"], f"{where}.features.desc", 200), f.get("media"), f.get("clip"),
+                                str(f_link) if f_link is not None else None,
+                                _texts(f.get("uses"), f"{where}.features.uses")))
     if not features:
         raise AppInfoError(f"{where}: 기능(features)이 하나는 있어야 합니다")
 
@@ -247,7 +257,28 @@ def pick_subject(apps, post_type: str, day: date, used, offset: int = 0) -> dict
     candidates = [c for c in candidates if app_last.get(c["app"].id, -1) == oldest_app]
     best = min(last.get(c["key"], -1) for c in candidates)
     pool = [c for c in candidates if last.get(c["key"], -1) == best]
-    return pool[(day.toordinal() + offset) % len(pool)]
+    subject = pool[(day.toordinal() + offset) % len(pool)]
+    # 같은 주제를 몇 번 썼는지: 기능 글의 각도(build_payload)를 돌리는 데 쓴다
+    return {**subject, "times_used": sum(subject_key(p) == subject["key"] for p in used)}
+
+
+ANGLES = ("show", "use")        # show = 이 기능이 무엇을 하나 (기존 글), use = 어떤 상황에 쓰나 (feature.uses 가 있을 때만)
+
+
+def feature_angle(subject: dict) -> tuple[str, str | None]:
+    """(각도, 쓰임새 문장 또는 None). uses 가 없는 기능은 늘 show. 있으면 쓸 때마다 show → use → show … 로 바꾸고,
+    use 차례마다 uses 를 하나씩 돌려 쓴다 (같은 기능 글이 매번 같은 글이 되지 않게, 2026-11-22)."""
+    f: Feature = subject["feature"]
+    n = subject.get("times_used", 0)
+    if not f.uses or ANGLES[n % len(ANGLES)] == "show":
+        return "show", None
+    return "use", f.uses[(n // len(ANGLES)) % len(f.uses)]
+
+
+def subject_link(subject: dict) -> str:
+    """답글에 붙일 링크: 기능 글이고 그 기능의 페이지가 적혀 있으면 그 주소, 아니면 앱 주소."""
+    f = subject.get("feature")
+    return f.link if f is not None and f.link else subject["app"].link
 
 
 def build_payload(subject: dict, post_type: str) -> dict:
@@ -262,6 +293,11 @@ def build_payload(subject: dict, post_type: str) -> dict:
     elif post_type == "feature":
         f: Feature = subject["feature"]
         payload["feature"] = {"name": f.name, "desc": f.desc}
+        if f.uses:      # uses 가 없는 앱(기존 계정)의 payload 는 그대로 둔다
+            angle, use = feature_angle(subject)
+            payload["angle"] = angle
+            if use:
+                payload["feature"]["use"] = use
     elif post_type == "devlog":
         u: Update = subject["update"]
         payload["update"] = {"date": u.date, "note": u.note}
@@ -289,9 +325,9 @@ def pick_media(subject: dict, post_type: str, used, cfg: Config, media_dir: Path
     return []
 
 
-def review_rows(app: AppInfo) -> list[dict]:
-    """검수자에게 넘기는 '연결된 앱' 행."""
-    return [{"name": app.name, "link": app.link, "facts": list(app.facts),
+def review_rows(app: AppInfo, link: str | None = None) -> list[dict]:
+    """검수자에게 넘기는 '연결된 앱' 행. link 는 이 글에 붙는 주소 (기능 페이지일 수 있다)."""
+    return [{"name": app.name, "link": link or app.link, "facts": list(app.facts),
              "features": [{"name": f.name, "desc": f.desc} for f in app.features]}]
 
 

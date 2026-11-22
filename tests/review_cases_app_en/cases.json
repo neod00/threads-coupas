@@ -1,5 +1,5 @@
 {
-  "_note": "English app-promo account (content: app, lang: en) reviewer exam (2026-11-07). Same structure and violation types as tests/review_cases_app/cases.json. All 20 problem posts must be blocked and at least 8 of 10 normal posts must pass. The app data lives here, separate from accounts/openbrain_en/data/apps.yaml, so editing apps.yaml does not change the exam.",
+  "_note": "English app-promo account (content: app, lang: en) reviewer exam (2026-11-07). Same structure and violation types as tests/review_cases_app/cases.json. All 20 problem posts must be blocked and at least 8 of 10 normal posts must pass. The app data lives here, separate from accounts/openbrain_en/data/apps.yaml, so editing apps.yaml does not change the exam. 2026-11-22: the merge-split feature has uses, and two cases (A11, B21) cover the use angle (times_used 1), so there are 21 problem posts and 11 normal posts.",
   "apps": [
     {
       "id": "demo-pdf",
@@ -30,7 +30,7 @@
           {"id": "edit-text", "name": "Edit text", "desc": "Tap a line in the PDF and change the text right there. Edits match the original font, weight and spacing"},
           {"id": "redact", "name": "Find and redact personal data", "desc": "Automatically finds phone numbers, ID numbers, emails, card numbers and account-like numbers and redacts them in one go. Redacted text is actually removed when you save"},
           {"id": "sign", "name": "Add a signature", "desc": "Draw your signature or type your name to make one and place it on the PDF. Signatures are saved only in your browser"},
-          {"id": "merge-split", "name": "Merge and split", "desc": "Combine several PDFs into one, pull out the pages you need, or split a PDF into several files"},
+          {"id": "merge-split", "name": "Merge and split", "desc": "Combine several PDFs into one, pull out the pages you need, or split a PDF into several files", "uses": ["pulling out only the pages someone asked for from a long scan", "combining several receipts into one PDF for an expense report"]},
           {"id": "compress", "name": "Compress", "desc": "Shrinks the images inside a PDF to make the file smaller"}
         ],
         "updates": [
@@ -157,6 +157,14 @@
     {"id": "B20", "expect": "block", "violations": ["R3"], "type": "feature", "app": "demo-pdf", "subject": "redact",
      "hook": "edit sensitive pdfs with zero hacking risk",
      "body": "your file never goes to a server\nso it can't ever get hacked\n\nfinds phone numbers and ID numbers\nand redacts them for you\n\nwhat do you redact first?",
-     "reply_line": "You can try it here."}
+     "reply_line": "You can try it here."},
+    {"id": "A11", "expect": "pass", "violations": [], "type": "feature", "app": "demo-pdf", "subject": "merge-split", "times_used": 1,
+     "hook": "my pdf editor pulls just the pages you need from a scan",
+     "body": "someone asks for two pages and all you have is one long scan\n\nin PdfMonster you pick the pages you need\nand save only those as a new PDF\n\nwhat would you use it for?",
+     "reply_line": "The split tool is here."},
+    {"id": "B21", "expect": "block", "violations": ["R2"], "type": "feature", "app": "demo-pdf", "subject": "merge-split", "times_used": 1,
+     "hook": "my pdf editor pulls just the pages you need from a scan",
+     "body": "last week a user told me she sent her landlord two pages out of a long scan with it\nshe said it took her ten seconds\n\nin PdfMonster you pick the pages you need\nand save only those as a new PDF\n\nwhat would you use it for?",
+     "reply_line": "The split tool is here."}
   ]
 }

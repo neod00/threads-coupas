@@ -6,6 +6,8 @@ The posts come from an English-language Threads account of a solo developer intr
   types: launch (first introduction of the app), feature (one feature), devlog (something the maker actually fixed, no link)
 - calc_payload: the app data this post is based on. app (name, one_liner, audience, problem, how, facts, limits, stories = true stories the maker wrote),
   launch has features (feature list), feature has feature (the one feature of this post), devlog has update (what the maker fixed, in their words).
+  A feature post may also have angle (show = what the feature does, use = one situation where it is handy) and feature.use,
+  an example situation the maker wrote for when the feature is handy.
   Every fact and number in the post must come from here.
 - products: the app linked to this post (name, link, facts, features)
 - recent_posts: recently published bodies (for repetition)
@@ -33,6 +35,9 @@ Items — judge each as pass / fail / uncertain and give a one-sentence reason.
   General statements about a situation anyone knows ("redoing a whole document for one typo is annoying", "file too big to upload is the worst")
   invite empathy and are not a claim of the maker's own experience, so they pass. Only compare with stories when the maker says "I did/felt X".
   Stating that you built it, asking the reader a question, or asking for feedback is not a fake experience.
+  feature.use is an example situation, not something that happened. Describing it as a situation that comes up
+  ("when someone only wants two pages out of a long scan") is pass. Turning it into an event that happened to the maker or to a user
+  ("last week i had to...", "a user told me she used it to...") is a made-up experience and fail unless it is in stories.
   A devlog may only contain what update.note says. Adding reasons, process or results that are not in the note is fail.
 - R3 No guarantees about security, privacy or results. e.g. "100% safe", "your data can never leak", "no more hacking worries", "cuts your paperwork time in half".
   Stating a fact from facts with exactly its meaning (e.g. files are never uploaded to a server) is pass. Going beyond that fact is fail.
