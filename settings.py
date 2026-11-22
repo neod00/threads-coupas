@@ -410,6 +410,10 @@ class Config:
     # 내 글 답글에 초안을 자동으로 달지 (auto_reply.py, 2026-11-15 사용자 결정, sabol.kka 만). reply_drafts 가 켜져 있어야 한다.
     # 실제로 다는 것은 저장소 Variables REPLY_AUTO_<계정>=true 이고 DRY_RUN 이 꺼졌을 때만. 남의 글에는 달지 않는다 (규칙 6)
     reply_auto: bool = False
+    # 길이 실험 (2026-11-22 사용자 결정): 하루 대화(talk) 글 하나를 이 글자 수 이하로 만든다. None 이면 끔.
+    # short_talk_until(KST 발행 날짜)까지만 한다. 표시는 calc_payload.experiment = "short"
+    short_talk_max_chars: int | None = None
+    short_talk_until: date | None = None
     # 게시물에 이미지·영상을 붙일 수 있는지 (규칙 2, 2026-10-30). 앱 홍보 계정의 자기 앱 캡처·시연 영상용. 쿠팡 계정은 false (media.py)
     allow_media: bool = False
     # 계정이 다루는 것: coupang(쿠팡 파트너스 상품, 기본) 또는 app(내가 만든 앱 홍보, app_posts.py, PLAN 1-2)
@@ -618,6 +622,12 @@ def parse_config(raw) -> Config:
         raise ConfigError(f"reply_auto 는 true/false 여야 합니다: {reply_auto!r}")
     if reply_auto and not reply_drafts:
         raise ConfigError("reply_auto 를 켜려면 reply_drafts 도 true 여야 합니다 (같은 기준으로 고른 초안을 단다)")
+    short_max, short_until = raw.get("short_talk_max_chars"), raw.get("short_talk_until")
+    if short_max is not None and (isinstance(short_max, bool) or not isinstance(short_max, int)
+                                  or not 60 <= short_max <= limits.max_body_chars):
+        raise ConfigError(f"short_talk_max_chars 는 60~{limits.max_body_chars} 사이 정수여야 합니다: {short_max!r}")
+    if short_until is not None:
+        short_until = _parse_date(short_until, "short_talk_until")
     allow_media = raw.get("allow_media", Config.allow_media)
     if not isinstance(allow_media, bool):
         raise ConfigError(f"allow_media 는 true/false 여야 합니다: {allow_media!r}")
@@ -643,6 +653,8 @@ def parse_config(raw) -> Config:
         ops_advice=ops_advice,
         reply_drafts=reply_drafts,
         reply_auto=reply_auto,
+        short_talk_max_chars=short_max,
+        short_talk_until=short_until,
         allow_media=allow_media,
         content=content,
         lang=lang,

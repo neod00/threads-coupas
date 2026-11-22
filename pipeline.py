@@ -175,6 +175,23 @@ def run_generate(store, cfg: Config, tariff, products, *, complete, review_call,
     return {"action": "generated", "posts": made}
 
 
+def short_talk_due(cfg: Config, day, day_posts) -> bool:
+    """길이 실험 (2026-11-22): 그날 대화 글 중 하나만 짧게 만든다. day_posts: 그날 자리를 잡은 글.
+    그날 이미 자리 잡은 대화 글 수가 (날짜 % 대화 자리 수) 와 같을 때 → 실험 글의 자리가 날마다 돈다."""
+    if not cfg.short_talk_max_chars or (cfg.short_talk_until is not None and day > cfg.short_talk_until):
+        return False
+    talks = [p for p in day_posts if p.get("type") == "talk"]
+    if any((p.get("calc_payload") or {}).get("experiment") == generator.SHORT_EXPERIMENT for p in talks):
+        return False
+    talk_slots = max(1, min(cfg.max_posts_per_day, len(cfg.slots_kst)) - rules.max_link_posts_per_day(cfg))
+    return len(talks) == day.toordinal() % talk_slots
+
+
+def _day_posts(posts, day) -> list:
+    return [p for p in posts if p.get("status") in rules.OCCUPYING and rules.post_time(p) is not None
+            and rules.kst_date(rules.post_time(p)) == day]
+
+
 def _generate_one(post_type, i, *, products, tariff, cfg, complete, variant, used, history, made, rev, bundles,
                   tomorrow, day_start, occupying, now, apps=None, gift=None) -> dict | None:
     """글 1개 생성 → 가드·검수 → approved 면 다음 날 빈 슬롯 배정. 앱 글에 고를 주제가 없으면 None."""
@@ -209,10 +226,16 @@ def _generate_one(post_type, i, *, products, tariff, cfg, complete, variant, use
     else:
         rows = reviewer_mod.product_rows(picked) if post_type not in generator.NO_LINK_TYPES else []
     check = reviewer_mod.make_check(rev, rows, newest_first[:reviewer_mod.RECENT_POSTS_LIMIT])
-    post = generator.generate_post(post_type, picked, tariff, cfg, complete, variant=variant, tip_topic=topic,
-                                   checks=[check], history=history + made, now=now,
-                                   hours=subject["hours"], recent_texts=same_type, bundle=bundle,
-                                   gift=gift if post_type == "gift" else None)
+    common = dict(variant=variant, tip_topic=topic, checks=[check], history=history + made, now=now,
+                  hours=subject["hours"], recent_texts=same_type, bundle=bundle,
+                  gift=gift if post_type == "gift" else None)
+    if post_type == "talk" and short_talk_due(cfg, tomorrow, _day_posts(occupying + made, tomorrow)):
+        post = generator.generate_post(post_type, picked, tariff, cfg, complete, max_chars=cfg.short_talk_max_chars, **common)
+        if post["status"] != "held" or not generator.too_long_only(post):
+            return _schedule(post, used, cfg, occupying, made, day_start, tomorrow)
+        # 끝내 글자 수를 못 맞춘 글은 버리고 보통 길이로 다시 만든다 (실험 때문에 자리를 비우지 않는다)
+        log.warning(f"[생성] 길이 실험 글이 {cfg.short_talk_max_chars}자를 못 맞춰 보통 글로 다시 만듭니다")
+    post = generator.generate_post(post_type, picked, tariff, cfg, complete, **common)
     return _schedule(post, used, cfg, occupying, made, day_start, tomorrow)
 
 

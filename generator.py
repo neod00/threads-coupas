@@ -50,6 +50,8 @@ USED_STATUSES = ("approved", "published")           # 본문에 실제로 쓰인
 MAX_ATTEMPTS = 3            # 최초 1회 + 재생성 2회 (PLAN Step 4)
 TOPIC_TAG_MAX = 50
 RECENT_TEXTS_FOR_GENERATOR = 5   # 생성기에 보여 줄 같은 유형의 최근 글 수
+SHORT_EXPERIMENT = "short"        # 길이 실험 글 표시 (calc_payload.experiment, 2026-11-22)
+SHORT_TOO_LONG = "[길이] 글이 깁니다"
 TALK_PRODUCT_GAP_DAYS = 3        # 상품 글로 나간 물건은 그 뒤 3일 동안 대화 글 주제에서 뒤로 미룬다 (2026-11-17)
 
 TIP_TOPICS = (
@@ -163,12 +165,35 @@ def system_prompt(cfg: Config, post_type: str, variant: str | None) -> str:
     )
 
 
+def short_rule(max_chars: int) -> str:
+    return (f"\n\n길이 실험 글입니다. 훅을 포함한 글 전체를 {max_chars}자 이하로 씁니다 (공백·줄바꿈도 셉니다). "
+            "본문 구성을 줄입니다: 사고 싶은 이유 한 줄, 걸리는 점 한 줄, 한마디로 답할 수 있는 마지막 질문 한 줄. "
+            "되묻는 줄과 걸리는 점 둘째·셋째 줄은 뺍니다. 줄마다 짧게 씁니다.")
+
+
+def length_check(max_chars: int) -> CheckFn:
+    """길이 실험 글의 글자 수 검사 (가드 다음, 검수자 앞). 훅을 바꾸면 풀릴 수 있어 평범한 list 를 돌려준다."""
+    def check(post: dict) -> list[str]:
+        n = len(post.get("text") or "")
+        return [f"{SHORT_TOO_LONG}: {n}자 (길이 실험 글은 {max_chars}자 이하)"] if n > max_chars else []
+    return check
+
+
+def too_long_only(post: dict) -> bool:
+    """보류된 길이 실험 글의 마지막 시도가 글자 수 문제뿐이었나 (그러면 보통 길이로 다시 만든다)."""
+    attempts = (post.get("guard_log") or {}).get("attempts") or []
+    last = attempts[-1].get("problems") if attempts else None
+    return bool(last) and all(str(p).startswith(SHORT_TOO_LONG) for p in last)
+
+
 def user_message(post_type: str, payload: dict, feedback: list | None = None, previous: dict | None = None,
-                 recent_texts: Sequence[str] = (), lang: str = "ko") -> str:
+                 recent_texts: Sequence[str] = (), lang: str = "ko", max_chars: int | None = None) -> str:
     if lang == "en":
         return _user_message_en(post_type, payload, feedback, previous, recent_texts)
     label = "앱 데이터" if post_type in APP_TYPES else "계산 데이터"
     msg = _read_prompt(f"tpl_{post_type}.md") + f"\n\n{label}(JSON):\n" + json.dumps(payload, ensure_ascii=False, indent=1)
+    if max_chars:
+        msg += short_rule(max_chars)
     if recent_texts:
         # 생성기가 최근 글을 모르면 같은 구조를 되풀이해 검수 R9(반복)에서 막힌다 (2026-10-04 자동 정지 원인).
         msg += (
@@ -563,12 +588,14 @@ def generate_post(post_type: str, picked: Sequence[Product], tariff: Tariff, cfg
                   checks: Sequence[CheckFn] = (), history: Iterable[dict] = (),
                   max_attempts: int = MAX_ATTEMPTS, now: datetime | None = None,
                   hours=None, recent_texts: Sequence[str] = (), bundle=None,
-                  app_subject: dict | None = None, gift=None) -> dict:
-    """posts 행 하나(dict)를 돌려준다. status 는 approved(가드+검수 통과), draft(가드만 통과, 검수 없음) 또는 held.
+                  app_subject: dict | None = None, gift=None, max_chars: int | None = None) -> dict:
+    """posts 행 하나(dict)를 돌려준다. max_chars: 길이 실험 글의 글자 수 한도 (talk 만, calc_payload.experiment 에 표시). status 는 approved(가드+검수 통과), draft(가드만 통과, 검수 없음) 또는 held.
     코드 가드(guard.check_post)는 항상 먼저 실행된다 (빼거나 끌 수 없음).
     checks: 가드 다음에 실행할 검사 함수들 (Step 4-B 검수자). history: 훅 선택용 최근 posts 행.
     app_subject: 앱 글(APP_TYPES)의 {payload, link, media, app_id} (app_posts 가 만든다)."""
-    checks = [guard.make_checker(cfg), *checks]
+    if max_chars and (post_type != "talk" or cfg.lang != "ko"):
+        raise ValueError("길이 실험(max_chars)은 한국어 talk 글만 됩니다")
+    checks = [guard.make_checker(cfg), *([length_check(max_chars)] if max_chars else []), *checks]
     if post_type not in POST_TYPES + APP_TYPES:
         raise ValueError(f"알 수 없는 유형: {post_type}")
     if post_type not in NO_LINK_TYPES and variant not in VARIANTS:
@@ -604,8 +631,8 @@ def generate_post(post_type: str, picked: Sequence[Product], tariff: Tariff, cfg
         # 재시도는 같은 글을 되풀이하지 않도록 온도를 올린다 (로옥션 방식)
         temperature = 0.3 if attempt == 1 else 0.7
         try:
-            draft = parse_draft(complete(system, user_message(post_type, payload, feedback, previous, recent_texts, cfg.lang),
-                                         temperature))
+            draft = parse_draft(complete(system, user_message(post_type, payload, feedback, previous, recent_texts,
+                                                              cfg.lang, max_chars), temperature))
             problems = draft_problems(draft, variant)
         except Exception as e:      # 네트워크·API 오류도 이력에 남기고 다음 시도로 넘어간다
             draft, problems = {}, [f"LLM 호출 실패: {e}"]
@@ -656,7 +683,8 @@ def generate_post(post_type: str, picked: Sequence[Product], tariff: Tariff, cfg
         **fields,
         **app_fields,
         "hook_candidates": candidates,
-        "calc_payload": payload,
+        # 실험 표시는 생성·가드·검수가 끝난 뒤에 붙인다 (LLM·검수자가 보는 데이터는 그대로)
+        "calc_payload": dict(payload, experiment=SHORT_EXPERIMENT) if max_chars else payload,
         # 규칙 4: approved 는 코드 가드와 AI 검수자를 모두 통과한 글에만. 검수 없이 가드만 통과하면 draft 로 둔다.
         "status": ("approved" if reviewed_ok else "draft") if passed else "held",
         "guard_log": {"attempts": attempts},
