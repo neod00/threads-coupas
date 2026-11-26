@@ -1,0 +1,85 @@
+name: Refresh token
+
+# 매주 월요일 09:20 KST: Threads 장기 토큰(60일)을 만료 전에 연장하고 GitHub Secrets 에 다시 저장한다 (refresh_token.py).
+# 2026-11-26 openbrain 토큰이 만료돼 발행이 멈췄다. 만료된 토큰은 연장할 수 없어서 만료 전에 미리 연장한다.
+# 저장에는 저장소 Secrets 의 GH_SECRETS_TOKEN 이 필요하다: fine-grained token, 저장소 neod00/threads-coupas 하나,
+#   권한 Secrets: Read and write 만. 없으면 연장하지 않고 실패로 끝내 알린다 (연장만 하고 저장 못 하는 일을 막는다).
+# 실패하면 텔레그램으로 알린다. 수동 실행의 dry_run 은 연장할지 판단만 하고 API·Secrets 를 건드리지 않는다.
+
+on:
+  schedule:
+    - cron: '20 0 * * 1'     # 월요일 00:20 UTC = 09:20 KST
+  workflow_dispatch:
+    inputs:
+      account:
+        description: '계정 (openbrain 또는 accounts/ 아래 폴더 이름). 예약 실행은 저장소 변수 ACCOUNTS_JSON 의 계정 전체'
+        required: false
+        type: string
+        default: openbrain
+      dry_run:
+        description: '연장할지 판단만 하고 API·Secrets 를 건드리지 않음'
+        required: false
+        type: boolean
+        default: true
+
+permissions:
+  contents: read
+
+concurrency:
+  group: refresh-token-${{ github.event_name == 'workflow_dispatch' && inputs.account || 'scheduled' }}
+  cancel-in-progress: false
+
+jobs:
+  refresh:
+    strategy:
+      fail-fast: false          # 한 계정이 실패해도 다른 계정은 계속 돈다
+      matrix:
+        account: ${{ fromJSON(github.event_name == 'workflow_dispatch' && format('["{0}"]', inputs.account) || vars.ACCOUNTS_JSON || '["openbrain"]') }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    env:
+      ACCOUNT: ${{ matrix.account != 'openbrain' && matrix.account || '' }}
+      SFX: ${{ matrix.account != 'openbrain' && format('_{0}', matrix.account) || '' }}
+      DRY_RUN: ${{ github.event_name == 'workflow_dispatch' && inputs.dry_run && 'true' || 'false' }}
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.11'
+          cache: pip
+      - run: pip install -r requirements.txt
+      - name: Refresh Threads token
+        id: refresh
+        env:
+          THREADS_ACCESS_TOKEN: ${{ secrets[format('THREADS_ACCESS_TOKEN{0}', env.SFX)] }}
+          THREADS_TOKEN_ISSUED_AT: ${{ secrets[format('THREADS_TOKEN_ISSUED_AT{0}', env.SFX)] }}
+          GH_SECRETS_TOKEN: ${{ secrets.GH_SECRETS_TOKEN }}
+        run: |
+          set -o pipefail
+          args=(--out "${RUNNER_TEMP}/new_token")
+          if [ "${DRY_RUN}" = "true" ]; then
+            args+=(--dry-run)
+          elif [ -z "${GH_SECRETS_TOKEN}" ]; then
+            echo "ERROR 저장소 Secrets 에 GH_SECRETS_TOKEN 이 없어 연장한 토큰을 저장할 수 없습니다. 연장하지 않습니다." | tee run.log
+            exit 1
+          fi
+          python refresh_token.py "${args[@]}" 2>&1 | tee run.log
+      - name: Save to GitHub Secrets
+        if: steps.refresh.outputs.refreshed == 'true'
+        env:
+          GH_TOKEN: ${{ secrets.GH_SECRETS_TOKEN }}
+          ISSUED_AT: ${{ steps.refresh.outputs.issued_at }}
+        run: |
+          set -euo pipefail
+          suffix="${SFX^^}"
+          gh secret set "THREADS_ACCESS_TOKEN${suffix}" --repo "${GITHUB_REPOSITORY}" < "${RUNNER_TEMP}/new_token" 2>&1 | tee -a run.log
+          gh secret set "THREADS_TOKEN_ISSUED_AT${suffix}" --repo "${GITHUB_REPOSITORY}" --body "${ISSUED_AT}" 2>&1 | tee -a run.log
+          rm -f "${RUNNER_TEMP}/new_token"
+          echo "THREADS_ACCESS_TOKEN${suffix}, THREADS_TOKEN_ISSUED_AT${suffix}=${ISSUED_AT} 저장" | tee -a run.log
+      - name: Alert on failure
+        if: failure() && env.DRY_RUN != 'true'
+        env:
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: python notify_failure.py --job "토큰 연장" --log run.log --url "${RUN_URL}" --note "스레드 토큰을 연장하지 못했어요. 만료되면 발행이 멈춥니다. 기록을 확인해 주세요."
