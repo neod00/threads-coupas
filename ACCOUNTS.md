@@ -14,6 +14,7 @@
 - 예약 실행은 저장소 변수 `ACCOUNTS_JSON` (예: `["openbrain","sabolkka"]`)에 적힌 계정만 돈다. 없으면 기존 계정만.
 - 수동 실행은 `account` 입력으로 계정을 고른다 (기본 openbrain).
 - Supabase pg_cron 은 계정마다 따로 깨운다. sabolkka 쪽은 `accounts/sabolkka/db/` 의 SQL(예약 이름 `threads-coupas-sabolkka-*`)이 `account=sabolkka` 로 깨운다. GitHub 토큰(Vault)은 기존 `db/publish_cron.sql` 이 넣어 둔 것을 같이 쓴다.
+- **Threads 토큰 자동 연장 (2026-11-26):** `refresh_token.yml` 이 매주 월요일 09:20 KST 에 계정마다 발급 14일이 지난 장기 토큰을 연장하고 `THREADS_ACCESS_TOKEN(_계정)`·`THREADS_TOKEN_ISSUED_AT(_계정)` Secrets 를 다시 저장한다. 저장에는 저장소 Secrets `GH_SECRETS_TOKEN` (fine-grained, 이 저장소 하나, Secrets: Read and write)이 필요하고, 없으면 연장하지 않고 텔레그램으로 알린다. 이미 만료된 토큰은 연장할 수 없어 새로 발급해야 한다 (`threads_token.py`).
 - **GitHub 깨우기 토큰(Vault `gh_dispatch_token`)을 바꿀 때는 이 한 줄만 실행한다** (파일 전체를 다시 실행하지 않는다):
   `select vault.update_secret((select id from vault.secrets where name = 'gh_dispatch_token'), '새 토큰');`
   토큰은 fine-grained, 저장소 `neod00/threads-coupas` 하나, Actions: Read and write. 만료되면 모든 깨우기가 401 Bad credentials 로 거절된다. 확인: `select status_code from net._http_response order by created desc limit 5;` (204 가 정상)
